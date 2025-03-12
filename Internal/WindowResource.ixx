@@ -1,0 +1,42 @@
+module;
+
+
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <vulkan/vulkan.hpp>
+#include <wayland-client.h>
+
+#include "../XDG/XDGShell.h"
+
+import YT.Types;
+import YT.Widget;
+
+export module YT.WindowResource;
+
+namespace YT
+{
+    export struct WindowResource final
+    {
+        wl_surface * m_WaylandSurface = nullptr;
+        xdg_surface * m_ShellSurface = nullptr;
+        xdg_toplevel * m_Toplevel = nullptr;
+
+        uint32_t m_SwapChainImageIndex = 0;
+        int m_FrameIndex = 0;
+        vk::UniqueSurfaceKHR m_VkSurface;
+        vk::UniqueSwapchainKHR m_SwapChain;
+        Vector<vk::Image> m_SwapChainImages;
+        Vector<vk::UniqueImageView> m_SwapChainImageViews;
+        Vector<vk::UniqueSemaphore> m_ImageAvailableSemaphores;
+        Vector<vk::UniqueSemaphore> m_RenderFinishedSemaphores;
+        Vector<vk::UniqueFence> m_RenderFinishedFences;
+        Vector<vk::UniqueCommandBuffer> m_CommandBuffers;
+
+        vk::Extent2D m_RequestedExtent = {};
+        vk::Extent2D m_SwapChainExtent = {};
+        vk::Format m_SwapChainFormat = vk::Format::eUndefined;
+
+        bool m_AlphaBackground : 1 = false;
+
+        WidgetRef<WidgetBase> m_Widget;
+    };
+}
