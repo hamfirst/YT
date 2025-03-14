@@ -2,15 +2,17 @@
 module;
 
 #include <wayland-client.h>
+#include <poll.h>
+
 #include <memory>
 #include <cstdio>
 #include <cstring>
+#include <chrono>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_wayland.h>
-
-#include "../XDG/XDGShell.h"
+#include <wayland-xdg-shell-client-protocol.h>
 
 import YT.Types;
 import YT.WindowTypes;
@@ -52,6 +54,8 @@ namespace YT
             throw Exception("Failed to connect to display");
         }
 
+        m_DisplayFD = wl_display_get_fd(m_Display);
+
         m_Registry = wl_display_get_registry(m_Display);
         if (!m_Registry)
         {
@@ -73,6 +77,10 @@ namespace YT
         }
 
         m_DisplayDisconnected = false;
+        m_LastFrameTime = std::chrono::steady_clock::now();
+
+        double update_rate = init_info.m_UpdateRate > 0 ? init_info.m_UpdateRate : 60.0;
+        m_UpdateInterval = 1.0 / update_rate;
     }
 
     WindowManager::~WindowManager()
@@ -103,6 +111,18 @@ namespace YT
         wl_display_roundtrip(m_Display);
     }
 
+    void WindowManager::UpdateWindows() noexcept
+    {
+        auto now = std::chrono::steady_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = now - m_LastFrameTime;
+
+        double delta_time = elapsed.count() * 1000.0;
+        if (elapsed.count() > m_UpdateInterval)
+        {
+            m_LastFrameTime = now;
+        }
+    }
+
     void WindowManager::RenderWindows() noexcept
     {
         m_WindowTable->VisitAllValidHandles([&](const WindowHandleData & handle)
@@ -112,11 +132,38 @@ namespace YT
                 g_RenderManager->RenderWindowResource(*resource);
             }
         });
+
+        m_HasDirtyWindows = false;
     }
 
     void WindowManager::WaitForNextFrame() noexcept
     {
+        pollfd pfd = {};
+        pfd.fd = m_DisplayFD;
+        pfd.events = POLLIN;
 
+        while (true)
+        {
+            int ret = poll(&pfd, 1, 1);
+            switch (ret)
+            {
+            case -1:
+                FatalPrint("Poll failed");
+                break;
+            case 0:
+                UpdateWindows();
+                break;
+            default:
+                wl_display_roundtrip(m_Display);
+
+                UpdateWindows();
+
+                if (m_HasDirtyWindows)
+                {
+                    return;
+                }
+            }
+        }
     }
 
     bool WindowManager::ShouldExit() const noexcept
@@ -171,6 +218,14 @@ namespace YT
         xdg_toplevel_set_app_id(toplevel, m_ApplicationName.c_str());
 
         wl_surface_commit(wl_surface);
+        static constexpr wl_callback_listener surface_frame_listener =
+        {
+            .done = HandleFrameCallback
+        };
+
+        window_resource->m_Callback = wl_surface_frame(window_resource->m_WaylandSurface);
+        wl_callback_add_listener(window_resource->m_Callback, &surface_frame_listener, handle_ptr);
+
         wl_display_roundtrip(m_Display);
         wl_surface_commit(wl_surface);
 
@@ -220,6 +275,11 @@ namespace YT
         if (WindowResource* resource = m_WindowTable->ResolveHandle(handle))
         {
             g_RenderManager->ReleaseWindowResource(*resource);
+
+            if (resource->m_Callback)
+            {
+                wl_callback_destroy(resource->m_Callback);
+            }
 
             if (resource->m_Toplevel)
             {
@@ -329,6 +389,26 @@ namespace YT
         xdg_wm_base_pong(shell, serial);
     }
 
+    void WindowManager::HandleFrameCallback(void *data, struct wl_callback *cb, uint32_t time) noexcept
+    {
+        wl_callback_destroy(cb);
+
+        WindowHandleData handle = WindowHandleData::CreateFromPtr(data);
+        if (WindowResource* resource = g_WindowManager->m_WindowTable->ResolveHandle(handle))
+        {
+            static constexpr wl_callback_listener surface_frame_listener =
+            {
+                .done = HandleFrameCallback
+            };
+
+            resource->m_WantsRedraw = true;
+            resource->m_Callback = wl_surface_frame(resource->m_WaylandSurface);
+            wl_callback_add_listener(resource->m_Callback, &surface_frame_listener, data);
+
+            g_WindowManager->m_HasDirtyWindows = true;
+        }
+    }
+
     void WindowManager::HandleShellSurfaceConfigure(void * data, struct xdg_surface * shell_surface, uint32_t serial) noexcept
     {
         VerbosePrint("Shell surface configure: {}", serial);
@@ -353,5 +433,8 @@ namespace YT
     {
         VerbosePrint("Close");
         WindowHandleData handle = WindowHandleData::CreateFromPtr(data);
+
+        g_WindowManager->CloseWindow(handle);
+
     }
 }

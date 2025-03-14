@@ -1,13 +1,14 @@
 module;
 
 #include <memory>
+#include <chrono>
 
 #include <wayland-client.h>
+#include <wayland-xdg-shell-client-protocol.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
-#include "../External/XDG/XDGShell.h"
 
 import YT.Types;
 import YT.WindowResource;
@@ -28,6 +29,7 @@ namespace YT
         ~WindowManager();
 
         void DispatchEvents() noexcept;
+        void UpdateWindows() noexcept;
         void RenderWindows() noexcept;
         void WaitForNextFrame() noexcept;
 
@@ -57,6 +59,8 @@ namespace YT
 
         static void HandleGlobalRemove(void * data, wl_registry * registry, uint32_t name) noexcept;
 
+        static void HandleFrameCallback(void *data, struct wl_callback *cb, uint32_t time) noexcept;
+
         static void HandleShellPing(void * data, struct xdg_wm_base * shell, uint32_t serial) noexcept;
         static void HandleShellSurfaceConfigure(void * data, struct xdg_surface * shellSurface, uint32_t serial) noexcept;
 
@@ -64,12 +68,15 @@ namespace YT
                                             int32_t width, int32_t height, struct wl_array * states) noexcept;
         static void HandleToplevelClose(void * data, struct xdg_toplevel * toplevel) noexcept;
 
+
     private:
         friend class WindowManagerInternal;
 
         String m_ApplicationName;
 
         wl_display * m_Display = nullptr;
+        int m_DisplayFD = 0;
+
         wl_registry * m_Registry = nullptr;
         wl_compositor * m_Compositor = nullptr;
 
@@ -77,6 +84,10 @@ namespace YT
         bool m_DisplayDisconnected = true;
 
         UniquePtr<WindowTable> m_WindowTable;
+
+        std::chrono::time_point<std::chrono::steady_clock> m_LastFrameTime;
+        double m_UpdateInterval = 0.0;
+        bool m_HasDirtyWindows = false;
     };
 
     export UniquePtr<WindowManager> g_WindowManager;

@@ -9,8 +9,7 @@ module;
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.hpp"
-
+#include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
 
 import YT.Types;
 import YT.BlockTable;
@@ -205,7 +204,7 @@ namespace YT
                 vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
                 vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 
-            m_DebugUtilsMessenger = m_Instance->createDebugUtilsMessengerEXT(
+            m_DebugUtilsMessenger = m_Instance->createDebugUtilsMessengerEXTUnique(
                     vk::DebugUtilsMessengerCreateInfoEXT({}, severity_flags, message_type_flags, &DebugMessageFunc));
 #endif
 
@@ -341,9 +340,7 @@ namespace YT
 
     RenderManager::~RenderManager()
     {
-#if !defined(NDEBUG)
-        m_Instance->destroyDebugUtilsMessengerEXT(m_DebugUtilsMessenger.value());
-#endif
+        m_Device->waitIdle();
     }
 
     bool RenderManager::CreateWindowResources(const WindowInitInfo & init_info, WindowResource & resource) noexcept
@@ -428,11 +425,21 @@ namespace YT
                     return false;
                 }
 
+                if (resource.m_RequestedExtent != resource.m_SwapChainExtent)
+                {
+                    VerbosePrint("Recreating swap chain due to requested size change");
+                    if (!UpdateWindowResource(resource))
+                    {
+                        return false;
+                    }
+                }
+
                 result = m_Device->acquireNextImageKHR(resource.m_SwapChain.get(), UINT64_MAX,
                         resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get(), {}, &resource.m_SwapChainImageIndex);
 
                 if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
                 {
+                    VerbosePrint("Recreating swap chain due to vulkan response");
                     if (!UpdateWindowResource(resource))
                     {
                         return false;
@@ -502,7 +509,7 @@ namespace YT
         vk::ShaderModuleCreateInfo shader_module_create_info;
         shader_module_create_info.pCode = reinterpret_cast<uint32_t*>(shader_data);
         shader_module_create_info.codeSize = shader_data_size;
-        m_ShaderModules.emplace(shader_data, m_Device->createShaderModule(shader_module_create_info));
+        m_ShaderModules.emplace(shader_data, m_Device->createShaderModuleUnique(shader_module_create_info));
     }
 
     MaybeInvalid<PSOHandle> RenderManager::RegisterPSO(const PSOCreateInfo & create_info) noexcept
@@ -545,6 +552,12 @@ namespace YT
     {
         try
         {
+            VerbosePrint("Creating swap chain {} {}...", resource.m_RequestedExtent.width, resource.m_RequestedExtent.height);
+            m_Device->waitIdle();
+
+            resource.m_SwapChainImageViews.clear();
+            resource.m_SwapChainImages.clear();
+
             vk::SurfaceCapabilitiesKHR surface_caps;
             if (vk::Result result = m_PhysicalDevice.getSurfaceCapabilitiesKHR(resource.m_VkSurface.get(), &surface_caps); result != vk::Result::eSuccess)
             {

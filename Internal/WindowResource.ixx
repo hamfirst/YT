@@ -1,11 +1,9 @@
 module;
 
-
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <wayland-client.h>
-
-#include "../XDG/XDGShell.h"
+#include <wayland-xdg-shell-client-protocol.h>
 
 import YT.Types;
 import YT.Widget;
@@ -19,6 +17,7 @@ namespace YT
         wl_surface * m_WaylandSurface = nullptr;
         xdg_surface * m_ShellSurface = nullptr;
         xdg_toplevel * m_Toplevel = nullptr;
+        wl_callback * m_Callback = nullptr;
 
         uint32_t m_SwapChainImageIndex = 0;
         int m_FrameIndex = 0;
@@ -35,6 +34,7 @@ namespace YT
         vk::Extent2D m_SwapChainExtent = {};
         vk::Format m_SwapChainFormat = vk::Format::eUndefined;
 
+        bool m_WantsRedraw : 1 = false;
         bool m_AlphaBackground : 1 = false;
 
         WidgetRef<WidgetBase> m_Widget;

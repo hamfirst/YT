@@ -5,8 +5,7 @@ module;
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
-
-#include "vk_mem_alloc.hpp"
+#include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
 
 
 import YT.Types;
@@ -61,6 +60,11 @@ namespace YT
     private:
 
         vk::UniqueInstance m_Instance;
+
+#if !defined(NDEBUG)
+        vk::UniqueDebugUtilsMessengerEXT m_DebugUtilsMessenger;
+#endif
+
         vk::PhysicalDevice m_PhysicalDevice;
         vk::UniqueDevice m_Device;
         vk::Queue m_Queue;
@@ -83,9 +87,6 @@ namespace YT
         std::array<FrameResource, FrameResourceCount> m_FrameResources;
         uint32_t m_FrameIndex = 0;
 
-#if !defined(NDEBUG)
-        Optional<vk::DebugUtilsMessengerEXT> m_DebugUtilsMessenger;
-#endif
     };
 
     export UniquePtr<RenderManager> g_RenderManager;

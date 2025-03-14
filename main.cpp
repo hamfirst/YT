@@ -7,14 +7,14 @@ import YT;
 
 YT::PSOHandle g_PSOHandle;
 
-uint8_t g_ScreenSpace_VS[] =
+uint8_t g_TestTriangle_VS[] =
 {
-#embed "../Shaders/bin/Screenspace.spv"
+#embed "../Shaders/bin/TestTriangle.spv"
 };
 
-uint8_t g_VertexColor_FS[] =
+uint8_t g_TestFrag_FS[] =
 {
-#embed "../Shaders/bin/VertexColor.spv"
+#embed "../Shaders/bin/TestFrag.spv"
 };
 
 class TestWidget : public YT::Widget<TestWidget>
@@ -40,17 +40,18 @@ int main()
         return 1;
     }
 
-    YT::RegisterShader(g_ScreenSpace_VS);
-    YT::RegisterShader(g_VertexColor_FS);
+    YT::RegisterShader(g_TestTriangle_VS);
+    YT::RegisterShader(g_TestFrag_FS);
 
     YT::PSOCreateInfo pso_create_info;
-    pso_create_info.m_VertexShader = g_ScreenSpace_VS;
-    pso_create_info.m_FragmentShader = g_VertexColor_FS;
+    pso_create_info.m_VertexShader = g_TestTriangle_VS;
+    pso_create_info.m_FragmentShader = g_TestFrag_FS;
     g_PSOHandle = YT::CreatePSO(pso_create_info);
 
-    YT::WindowInitInfo init_info_window;
+    YT::WindowInitInfo window_init_info;
+    window_init_info.m_AlphaBackground = false;
 
-    if (YT::WindowRef window_ref = YT::CreateWindow_GetRef(init_info_window))
+    if (YT::WindowRef window_ref = YT::CreateWindow_GetRef(window_init_info))
     {
         window_ref.SetContent(YT::MakeWidget<TestWidget>());
 

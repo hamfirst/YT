@@ -112,6 +112,7 @@ namespace YT
         int m_ApplicationVersion = 1;
 
         std::size_t m_ThreadPoolSize = std::thread::hardware_concurrency();
+        int m_UpdateRate = 60;
     };
 
     export struct WindowInitInfo final
