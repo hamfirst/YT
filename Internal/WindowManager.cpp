@@ -20,6 +20,7 @@ import YT.WindowTable;
 import YT.WindowResource;
 import YT.RenderManager;
 import YT.Widget;
+import YT.Delegate;
 
 module YT.WindowManager;
 
@@ -270,6 +271,16 @@ namespace YT
         return false;
     }
 
+    OptionalPtr<Delegate<bool()>> WindowManager::GetOnCloseCallback(WindowHandleData handle) noexcept
+    {
+        if (WindowResource* resource = m_WindowTable->ResolveHandle(handle))
+        {
+            return &resource->m_OnCloseCallback;
+        }
+
+        return nullptr;
+    }
+
     void WindowManager::CloseWindow(WindowHandleData handle) noexcept
     {
         if (WindowResource* resource = m_WindowTable->ResolveHandle(handle))
@@ -433,8 +444,13 @@ namespace YT
     {
         VerbosePrint("Close");
         WindowHandleData handle = WindowHandleData::CreateFromPtr(data);
-
-        g_WindowManager->CloseWindow(handle);
+        if (WindowResource* resource = g_WindowManager->m_WindowTable->ResolveHandle(handle))
+        {
+            if (resource->m_OnCloseCallback.ExecuteWithDefault(true))
+            {
+                g_WindowManager->CloseWindow(handle);
+            }
+        }
 
     }
 }

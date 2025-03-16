@@ -5,6 +5,7 @@ module;
 import YT.Types;
 import YT.Widget;
 import YT.WindowTypes;
+import YT.Delegate;
 
 export module YT.Window;
 
@@ -38,6 +39,8 @@ namespace YT
 
         bool SetContent(const WidgetRef<WidgetBase> & widget_ref) noexcept;
         bool SetContent(WidgetRef<WidgetBase> && widget_ref) noexcept;
+
+        OptionalPtr<Delegate<bool()>> OnCloseCallback() noexcept;
 
         void CloseWindow() noexcept;
 

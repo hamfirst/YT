@@ -49,7 +49,6 @@ int main()
     g_PSOHandle = YT::CreatePSO(pso_create_info);
 
     YT::WindowInitInfo window_init_info;
-    window_init_info.m_AlphaBackground = false;
 
     if (YT::WindowRef window_ref = YT::CreateWindow_GetRef(window_init_info))
     {

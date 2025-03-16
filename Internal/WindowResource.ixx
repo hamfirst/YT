@@ -7,6 +7,7 @@ module;
 
 import YT.Types;
 import YT.Widget;
+import YT.Delegate;
 
 export module YT.WindowResource;
 
@@ -38,5 +39,6 @@ namespace YT
         bool m_AlphaBackground : 1 = false;
 
         WidgetRef<WidgetBase> m_Widget;
+        Delegate<bool()> m_OnCloseCallback;
     };
 }

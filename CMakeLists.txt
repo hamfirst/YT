@@ -35,7 +35,7 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Types.ixx
         Widget.ixx
         Window.ixx
-        Delegates.ixx
+        Delegate.ixx
         Internal/RenderManager.ixx
         Internal/RenderTypes.ixx
         Internal/WindowManager.ixx
@@ -43,6 +43,7 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Internal/WindowResource.ixx
         Internal/WindowTable.ixx
         Internal/WindowTypes.ixx
+        Internal/WidgetRegistry.ixx
         Internal/BlockTable.ixx
         Internal/TransientBuffer.ixx
         Internal/ShaderBuilder.ixx

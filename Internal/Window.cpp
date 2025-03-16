@@ -6,6 +6,7 @@ import YT.Types;
 import YT.WindowTypes;
 import YT.WindowManager;
 import YT.Widget;
+import YT.Delegate;
 
 module YT.Window;
 
@@ -48,6 +49,11 @@ namespace YT
     bool WindowRef::SetContent(WidgetRef<WidgetBase> && widget_ref) noexcept
     {
         return g_WindowManager->SetWindowContent(m_WindowHandle, std::move(widget_ref));
+    }
+
+    OptionalPtr<Delegate<bool()>> WindowRef::OnCloseCallback() noexcept
+    {
+        return g_WindowManager->GetOnCloseCallback(m_WindowHandle);
     }
 
     void WindowRef::CloseWindow() noexcept

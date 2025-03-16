@@ -15,6 +15,7 @@ import YT.WindowResource;
 import YT.WindowTypes;
 import YT.WindowTable;
 import YT.Widget;
+import YT.Delegate;
 
 export module YT.WindowManager;
 
@@ -42,6 +43,8 @@ namespace YT
 
         bool SetWindowContent(WindowHandleData handle, const WidgetRef<WidgetBase> & widget_ref) noexcept;
         bool SetWindowContent(WindowHandleData handle, WidgetRef<WidgetBase> && widget_ref) noexcept;
+
+        OptionalPtr<Delegate<bool()>> GetOnCloseCallback(WindowHandleData handle) noexcept;
 
         void CloseWindow(WindowHandleData handle) noexcept;
 

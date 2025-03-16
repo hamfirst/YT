@@ -8,6 +8,7 @@ import YT.RenderManager;
 export module YT;
 
 export import YT.Types;
+export import YT.Delegate;
 export import YT.Init;
 export import YT.Drawer;
 export import YT.Window;
