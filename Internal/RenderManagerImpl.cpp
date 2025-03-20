@@ -350,6 +350,7 @@ namespace YT
         try
         {
             resource.m_AlphaBackground = init_info.m_AlphaBackground;
+            resource.m_WantsRedraw = true;
 
             if (!g_WindowManager->CreateRenderSurface(m_Instance, resource))
             {
@@ -407,83 +408,87 @@ namespace YT
         return true;
     }
 
-    bool RenderManager::RenderWindowResource(WindowResource & resource) noexcept
+    bool RenderManager::RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept
     {
-        if (resource.m_Widget)
+        for (WindowResource * resource_ptr : window_resources)
         {
-            try
+            WindowResource & resource = *resource_ptr;
+            if (resource.m_Widget)
             {
-                vk::Result result = vk::Result::eSuccess;
-
-                result = m_Device->waitForFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get(), true, UINT64_MAX);
-                if (result != vk::Result::eSuccess)
+                try
                 {
-                    return false;
-                }
+                    vk::Result result = vk::Result::eSuccess;
 
-                result = m_Device->resetFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
-                if (result != vk::Result::eSuccess)
-                {
-                    return false;
-                }
-
-                if (resource.m_RequestedExtent != resource.m_SwapChainExtent)
-                {
-                    VerbosePrint("Recreating swap chain due to requested size change");
-                    if (!UpdateWindowResource(resource))
+                    result = m_Device->waitForFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get(), true, UINT64_MAX);
+                    if (result != vk::Result::eSuccess)
                     {
                         return false;
                     }
-                }
 
-                result = m_Device->acquireNextImageKHR(resource.m_SwapChain.get(), UINT64_MAX,
-                        resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get(), {}, &resource.m_SwapChainImageIndex);
-
-                if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
-                {
-                    VerbosePrint("Recreating swap chain due to vulkan response");
-                    if (!UpdateWindowResource(resource))
+                    result = m_Device->resetFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
+                    if (result != vk::Result::eSuccess)
                     {
                         return false;
                     }
-                }
 
-                if (!PrepareCommandBuffer(resource))
+                    if (resource.m_RequestedExtent != resource.m_SwapChainExtent)
+                    {
+                        VerbosePrint("Recreating swap chain due to requested size change");
+                        if (!UpdateWindowResource(resource))
+                        {
+                            return false;
+                        }
+                    }
+
+                    result = m_Device->acquireNextImageKHR(resource.m_SwapChain.get(), UINT64_MAX,
+                            resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get(), {}, &resource.m_SwapChainImageIndex);
+
+                    if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
+                    {
+                        VerbosePrint("Recreating swap chain due to vulkan response");
+                        if (!UpdateWindowResource(resource))
+                        {
+                            return false;
+                        }
+                    }
+
+                    if (!PrepareCommandBuffer(resource))
+                    {
+                        return false;
+                    }
+
+                    PSODeferredSettings pso_deferred_settings;
+                    pso_deferred_settings.m_SurfaceFormat = resource.m_SwapChainFormat;
+
+                    Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), pso_deferred_settings);
+                    resource.m_Widget->OnDraw(drawer);
+
+                    if (!CompleteCommandBuffer(resource))
+                    {
+                        return false;
+                    }
+
+                    if (!SubmitCommandBuffer(resource))
+                    {
+                        return false;
+                    }
+
+                    resource.m_FrameIndex++;
+                    if (resource.m_FrameIndex >= resource.m_SwapChainImages.size())
+                    {
+                        resource.m_FrameIndex = 0;
+                    }
+
+                    return true;
+                }
+                catch (vk::SystemError& err)
                 {
-                    return false;
+                    FatalPrint("Failed to acquire swapchain image: {}", err.what());
                 }
-
-                PSODeferredSettings pso_deferred_settings;
-                pso_deferred_settings.m_SurfaceFormat = resource.m_SwapChainFormat;
-
-                Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), pso_deferred_settings);
-                resource.m_Widget->OnDraw(drawer);
-
-                if (!CompleteCommandBuffer(resource))
+                catch (...)
                 {
-                    return false;
+                    FatalPrint("Failed to acquire swapchain image: unknown exception");
                 }
-
-                if (!SubmitCommandBuffer(resource))
-                {
-                    return false;
-                }
-
-                resource.m_FrameIndex++;
-                if (resource.m_FrameIndex >= resource.m_SwapChainImages.size())
-                {
-                    resource.m_FrameIndex = 0;
-                }
-
-                return true;
-            }
-            catch (vk::SystemError& err)
-            {
-                FatalPrint("Failed to acquire swapchain image: {}", err.what());
-            }
-            catch (...)
-            {
-                FatalPrint("Failed to acquire swapchain image: unknown exception");
             }
         }
 

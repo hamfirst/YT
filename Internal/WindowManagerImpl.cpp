@@ -125,13 +125,20 @@ namespace YT
 
     void WindowManager::RenderWindows() noexcept
     {
+        Vector<WindowResource*> window_resources;
         m_WindowTable->VisitAllValidHandles([&](const WindowHandleData & handle)
         {
             if (WindowResource* resource = m_WindowTable->ResolveHandle(handle))
             {
-                g_RenderManager->RenderWindowResource(*resource);
+                if (resource->m_WantsRedraw)
+                {
+                    resource->m_WantsRedraw = false;
+                    window_resources.push_back(resource);
+                }
             }
         });
+
+        g_RenderManager->RenderWindowResources(window_resources);
 
         m_HasDirtyWindows = false;
     }

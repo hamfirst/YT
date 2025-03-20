@@ -1,7 +1,6 @@
 module;
 
 #include <memory>
-#include <atomic>
 #include <unordered_map>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
@@ -30,7 +29,7 @@ namespace YT
         bool CreateWindowResources(const WindowInitInfo & init_info, WindowResource & resource) noexcept;
         bool UpdateWindowResource(WindowResource & resource) noexcept;
 
-        bool RenderWindowResource(WindowResource & resource) noexcept;
+        bool RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept;
         void ReleaseWindowResource(WindowResource & resource) noexcept;
 
         template <int ArraySize>

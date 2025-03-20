@@ -8,7 +8,6 @@ module;
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 
-
 export module YT:ShaderBuilder;
 
 import :Types;
