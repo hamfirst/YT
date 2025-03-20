@@ -2,6 +2,10 @@
   "name" : "yt",
   "version-string" : "1.0.0",
   "builtin-baseline" : "d5cb5b9392b89fe9ad25786022415999202277d6",
+  "vcpkg-configuration" :
+  {
+    "overlay-triplets": [ "./custom-triplets" ]
+  },
   "dependencies" : [ {
     "name" : "freetype",
     "version>=" : "2.13.3"

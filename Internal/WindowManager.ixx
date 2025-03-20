@@ -9,15 +9,14 @@ module;
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
+module YT:WindowManager;
 
-import YT.Types;
-import YT.WindowResource;
-import YT.WindowTypes;
-import YT.WindowTable;
-import YT.Widget;
-import YT.Delegate;
-
-export module YT.WindowManager;
+import :Types;
+import :WindowResource;
+import :WindowTypes;
+import :WindowTable;
+import :Widget;
+import :Delegate;
 
 namespace YT
 {

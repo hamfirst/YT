@@ -4,10 +4,13 @@ module;
 #include <atomic>
 #include <cstdint>
 #include <random>
+#include <mutex>
+#include <optional>
 
-import YT.Types;
 
-export module YT.BlockTable;
+export module YT:BlockTable;
+
+import :Types;
 
 namespace YT
 {
@@ -148,17 +151,24 @@ namespace YT
             {
                 if (m_Blocks[block_index])
                 {
-                    for (int element_index = 0; element_index < BlockSize; ++element_index)
+                    int element_index = 0;
+                    for (int word_index = 0; word_index < BlockSize / 64; ++word_index, ++element_index)
                     {
-                        int word_index = element_index / 64;
-                        int bit_index = element_index % 64;
-
-                        if (m_Blocks[block_index]->m_BlockAlloc[word_index].load() & (1 << bit_index))
+                        uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load();
+                        if (word == 0)
                         {
-                            ElementStorage & element = m_Blocks[block_index]->m_BlockData[element_index];
+                            continue;
+                        }
 
-                            T * t = reinterpret_cast<T *>(&element.m_Buffer);
-                            t->~T();
+                        for (int bit_index = 0; bit_index < 64; ++bit_index, ++element_index)
+                        {
+                            if (word & (1 << bit_index))
+                            {
+                                ElementStorage & element = m_Blocks[block_index]->m_BlockData[element_index];
+
+                                T * t = reinterpret_cast<T *>(&element.m_Buffer);
+                                t->~T();
+                            }
                         }
                     }
 
@@ -244,6 +254,40 @@ namespace YT
             return nullptr;
         }
 
+        template <typename Visitor>
+        void VisitAllHandles(Visitor && visitor)
+        {
+            for (int block_index = 0; block_index < BlockCount; ++block_index)
+            {
+                if (m_Blocks[block_index])
+                {
+                    int element_index = 0;
+                    for (int word_index = 0; word_index < BlockSize / 64; ++word_index, ++element_index)
+                    {
+                        uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load();
+                        if (word == 0)
+                        {
+                            continue;
+                        }
+
+                        for (int bit_index = 0; bit_index < 64; ++bit_index, ++element_index)
+                        {
+                            if (word & (1 << bit_index))
+                            {
+                                ElementStorage & element = m_Blocks[block_index]->m_BlockData[element_index];
+
+                                visitor(BlockTableHandle
+                                {
+                                    .m_BlockIndex = block_index,
+                                    .m_ElemIndex = element_index,
+                                    .m_Generation = element.m_Generation,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
     private:
 
         bool AllocateSlot(int block_index, int element_index) noexcept
@@ -368,6 +412,7 @@ namespace YT
 
             return {};
         }
+
 
     private:
 

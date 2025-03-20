@@ -2,7 +2,7 @@ module;
 
 #include <cstdint>
 
-export module YT.WindowTypes;
+export module YT:WindowTypes;
 
 namespace YT
 {

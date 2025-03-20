@@ -1,14 +1,16 @@
 module;
 
 #include <utility>
+#include <memory>
 
-import YT.Types;
-import YT.WindowTypes;
-import YT.WindowManager;
-import YT.Widget;
-import YT.Delegate;
+module YT:WindowImpl;
 
-module YT.Window;
+import :Types;
+import :WindowTypes;
+import :WindowManager;
+import :Widget;
+import :Delegate;
+import :Window;
 
 namespace YT
 {

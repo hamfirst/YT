@@ -6,9 +6,9 @@ module;
 #include <vulkan/vulkan.hpp>
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
 
-import YT.Types;
+module YT:TransientBuffer;
 
-export module YT.TransientBuffer;
+import :Types;
 
 namespace YT
 {

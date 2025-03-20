@@ -2,14 +2,15 @@ module;
 
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 #include <utility>
+#include <concepts>
+#include <format>
 
-import YT.Types;
-import YT.BlockTable;
-import YT.Drawer;
+export module YT:Widget;
 
-export module YT.Widget;
+import :Types;
+import :BlockTable;
+import :Drawer;
 
 namespace YT
 {
@@ -26,6 +27,12 @@ namespace YT
     {
         alignas(WidgetClass) std::byte m_Data[sizeof(WidgetClass)];
     };
+
+    export class WidgetBase;
+    export struct WidgetBaseInitData;
+
+    export template <typename MyWidgetClass, typename InitDataType = WidgetBaseInitData, typename ParentWidgetClass = WidgetBase>
+    class Widget;
 
     export template <typename WidgetClass>
     class WidgetHandle;
@@ -293,6 +300,9 @@ namespace YT
         template <typename CastWidgetClass>
         friend class WidgetHandle;
 
+        template <typename MyWidgetClass, typename InitDataType = WidgetBaseInitData, typename ParentWidgetClass = WidgetBase>
+        friend class Widget;
+
         WidgetStorageBase * m_Storage = nullptr;
         WidgetClass * m_Widget = nullptr;
         WidgetDeleter m_Deleter = nullptr;
@@ -319,10 +329,13 @@ namespace YT
         WidgetBase() = default;
         virtual ~WidgetBase() = default;
 
-        virtual void OnDraw(Drawer & drawer) { };
+        virtual void OnUpdate(double delta_time) { }
+        virtual void OnDraw(Drawer & drawer) { }
+
+        virtual void VisitChildren(Function<void(const WidgetBase&)> & callback) { }
     };
 
-    export template <typename MyWidgetClass, typename InitDataType = WidgetBaseInitData, typename ParentWidgetClass = WidgetBase>
+    template <typename MyWidgetClass, typename InitDataType = WidgetBaseInitData, typename ParentWidgetClass = WidgetBase>
     class Widget : public ParentWidgetClass
     {
     public:
@@ -370,10 +383,38 @@ namespace YT
             GetWidgetStorage().ReleaseHandle(storage->m_Handle);
         }
 
+        template <typename Visitor>
+        static void VisitAllHandles(Visitor && visitor)
+        {
+            GetWidgetStorage().VisitAllHandles([&](const BlockTableHandle & handle)
+            {
+                WidgetStorage<MyWidgetClass> * storage = GetWidgetStorage().ResolveHandle(handle);
+
+                visitor(
+                    WidgetHandle<MyWidgetClass>(storage,
+                        reinterpret_cast<MyWidgetClass *>(&storage->m_Data),
+                        [](void * ptr) { auto widget = static_cast<MyWidgetClass *>(ptr); delete widget; }));
+            });
+        }
+
+        template <typename Visitor>
+        static void VisitAllWidgets(Visitor && visitor)
+        {
+            VisitAllHandles([&](WidgetHandle<MyWidgetClass> handle)
+            {
+                WidgetRef<MyWidgetClass> widget_ref = handle.Get();
+                if (MyWidgetClass * widget = *widget_ref)
+                {
+                    visitor(widget);
+                }
+            });
+        }
+
     private:
 
         template <typename WidgetClass, typename... Args>
         friend WidgetRef<WidgetClass> MakeWidget(Args &&...) noexcept;
+
     };
 
     export template <typename WidgetClass, typename... Args>

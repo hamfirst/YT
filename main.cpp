@@ -1,11 +1,10 @@
-
-
 #include <cstdint>
 
 import YT;
 
+using namespace YT;
 
-YT::PSOHandle g_PSOHandle;
+PSOHandle g_PSOHandle;
 
 uint8_t g_TestTriangle_VS[] =
 {
@@ -17,9 +16,8 @@ uint8_t g_TestFrag_FS[] =
 #embed "../Shaders/bin/TestFrag.spv"
 };
 
-class TestWidget : public YT::Widget<TestWidget>
+class TestWidget : public Widget<TestWidget>
 {
-
 public:
     virtual void OnDraw(YT::Drawer & drawer) override
     {
@@ -29,38 +27,38 @@ public:
 
 int main()
 {
-    YT::ApplicationInitInfo init_info
+    ApplicationInitInfo init_info
     {
         .m_ApplicationName = "YTTest"
     };
 
-    if(!YT::Init(init_info))
+    if (!Init(init_info))
     {
-        YT::Print("YT::Init failed");
+        FatalPrint("YT::Init failed");
         return 1;
     }
 
-    YT::RegisterShader(g_TestTriangle_VS);
-    YT::RegisterShader(g_TestFrag_FS);
+    RegisterShader(g_TestTriangle_VS);
+    RegisterShader(g_TestFrag_FS);
 
-    YT::PSOCreateInfo pso_create_info;
+    PSOCreateInfo pso_create_info;
     pso_create_info.m_VertexShader = g_TestTriangle_VS;
     pso_create_info.m_FragmentShader = g_TestFrag_FS;
-    g_PSOHandle = YT::CreatePSO(pso_create_info);
+    g_PSOHandle = CreatePSO(pso_create_info);
 
-    YT::WindowInitInfo window_init_info;
+    WindowInitInfo window_init_info;
 
-    if (YT::WindowRef window_ref = YT::CreateWindow_GetRef(window_init_info))
+    if (WindowRef window_ref = CreateWindow_GetRef(window_init_info))
     {
-        window_ref.SetContent(YT::MakeWidget<TestWidget>());
+        window_ref.SetContent(MakeWidget<TestWidget>());
 
-        YT::RunUntilAllWindowsClosed();
+        RunUntilAllWindowsClosed();
     }
     else
     {
-        YT::FatalPrint("Failed to create window");
+        FatalPrint("Failed to create window");
     }
 
-    YT::Cleanup();
+    Cleanup();
     return 0;
 }

@@ -2,12 +2,13 @@ module;
 
 #include <cstdint>
 #include <random>
+#include <optional>
 
-import YT.Types;
-import YT.WindowTypes;
-import YT.WindowResource;
+module YT:WindowTable;
 
-export module YT.WindowTable;
+import :Types;
+import :WindowTypes;
+import :WindowResource;
 
 namespace YT
 {

@@ -3,10 +3,11 @@ module;
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
-import YT.Types;
-import YT.BlockTable;
 
-export module YT.RenderTypes;
+export module YT:RenderTypes;
+
+import :Types;
+import :BlockTable;
 
 namespace YT
 {

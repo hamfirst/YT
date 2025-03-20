@@ -2,12 +2,12 @@ module;
 
 #include <atomic>
 
-import YT.Types;
-import YT.Widget;
-import YT.WindowTypes;
-import YT.Delegate;
+export module YT:Window;
 
-export module YT.Window;
+import :Types;
+import :Widget;
+import :WindowTypes;
+import :Delegate;
 
 namespace YT
 {

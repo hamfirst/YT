@@ -2,19 +2,19 @@ module;
 
 #include <memory>
 #include <atomic>
+#include <unordered_map>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
 
+module YT:RenderManager;
 
-import YT.Types;
-import YT.RenderTypes;
-import YT.WindowResource;
-import YT.BlockTable;
-import YT.TransientBuffer;
-
-export module YT.RenderManager;
+import :Types;
+import :RenderTypes;
+import :WindowResource;
+import :BlockTable;
+import :TransientBuffer;
 
 namespace YT
 {

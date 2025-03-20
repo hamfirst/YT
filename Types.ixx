@@ -13,7 +13,7 @@ module;
 #include <print>
 #include <stdexcept>
 
-export module YT.Types;
+export module YT:Types;
 
 namespace YT
 {

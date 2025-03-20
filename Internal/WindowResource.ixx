@@ -5,11 +5,12 @@ module;
 #include <wayland-client.h>
 #include <wayland-xdg-shell-client-protocol.h>
 
-import YT.Types;
-import YT.Widget;
-import YT.Delegate;
 
-export module YT.WindowResource;
+module YT:WindowResource;
+
+import :Types;
+import :Widget;
+import :Delegate;
 
 namespace YT
 {

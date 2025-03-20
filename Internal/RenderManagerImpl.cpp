@@ -2,6 +2,7 @@ module;
 
 #include <memory>
 #include <iostream>
+#include <unordered_map>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -10,15 +11,6 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #define VMA_IMPLEMENTATION
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
-
-import YT.Types;
-import YT.BlockTable;
-import YT.TransientBuffer;
-import YT.RenderTypes;
-import YT.WindowResource;
-import YT.WindowManager;
-import YT.Drawer;
-
 
 // Loaded extensions
 PFN_vkCreateDebugUtilsMessengerEXT pfnVkCreateDebugUtilsMessengerEXT;
@@ -37,6 +29,17 @@ VKAPI_ATTR void VKAPI_CALL vkDestroyDebugUtilsMessengerEXT(VkInstance instance, 
 {
     return pfnVkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
 }
+
+module YT:RenderManagerImpl;
+
+import :Types;
+import :BlockTable;
+import :TransientBuffer;
+import :RenderTypes;
+import :WindowResource;
+import :WindowManager;
+import :RenderManager;
+import :Drawer;
 
 VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
     vk::DebugUtilsMessageSeverityFlagBitsEXT message_severity,
@@ -87,7 +90,6 @@ VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
     return false;
 }
 
-module YT.RenderManager;
 namespace YT
 {
     bool RenderManager::CreateRenderManager(const ApplicationInitInfo & init_info) noexcept

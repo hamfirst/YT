@@ -8,9 +8,10 @@ module;
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 
-import YT.Types;
 
-export module YT.ShaderBuilder;
+export module YT:ShaderBuilder;
+
+import :Types;
 
 namespace YT
 {

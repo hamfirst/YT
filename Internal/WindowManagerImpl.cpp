@@ -14,15 +14,14 @@ module;
 #include <vulkan/vulkan_wayland.h>
 #include <wayland-xdg-shell-client-protocol.h>
 
-import YT.Types;
-import YT.WindowTypes;
-import YT.WindowTable;
-import YT.WindowResource;
-import YT.RenderManager;
-import YT.Widget;
-import YT.Delegate;
+module YT:WindowManagerImpl;
 
-module YT.WindowManager;
+import :Types;
+import :WindowTypes;
+import :WindowTable;
+import :WindowResource;
+import :RenderManager;
+import :WindowManager;
 
 namespace YT
 {

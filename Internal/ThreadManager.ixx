@@ -1,12 +1,14 @@
 module;
 
+#include <algorithm>
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <semaphore>
 
-import YT.Types;
+module YT:ThreadManager;
 
-export module YT.ThreadManager;
+import :Types;
 
 namespace YT
 {

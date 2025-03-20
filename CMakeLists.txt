@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.29)
+
+set(VCPKG_TARGET_TRIPLET x64-linux-libcpp)
+set(VCPKG_HOST_TRIPLET x64-linux-libcpp)
+
 project(YT)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_FLAGS "-stdlib=libc++ -freflection")
+set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++ -freflection")
 
 find_package(Vulkan)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
@@ -20,12 +26,8 @@ find_package(WaylandScanner REQUIRED)
 find_package(WaylandProtocols REQUIRED)
 
 add_executable(YTTest
-        ${PROTO_CLIENT_SRC}
-        Internal/WindowManager.cpp
-        Internal/RenderManager.cpp
         main.cpp
-        Internal/Drawer.cpp
-        Internal/Window.cpp
+        ${PROTO_CLIENT_SRC}
 )
 
 target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
@@ -36,17 +38,25 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Widget.ixx
         Window.ixx
         Delegate.ixx
+        WindowTypes.ixx
+        RenderTypes.ixx
+
         Internal/RenderManager.ixx
-        Internal/RenderTypes.ixx
         Internal/WindowManager.ixx
         Internal/ThreadManager.ixx
         Internal/WindowResource.ixx
         Internal/WindowTable.ixx
-        Internal/WindowTypes.ixx
         Internal/WidgetRegistry.ixx
         Internal/BlockTable.ixx
         Internal/TransientBuffer.ixx
         Internal/ShaderBuilder.ixx
+
+        Internal/InitImpl.cpp
+        Internal/DrawerImpl.cpp
+        Internal/WindowImpl.cpp
+        Internal/WindowManagerImpl.cpp
+        Internal/RenderManagerImpl.cpp
+        Internal/YTImpl.cpp
 )
 
 
@@ -68,7 +78,11 @@ target_link_libraries(YTTest PRIVATE
         glslang::SPIRV
         glslang::glslang-default-resource-limits
 )
-target_compile_options(YTTest PRIVATE -Wno-c23-extensions -Wno-invalid-offsetof -Wno-nullability-completeness)
+target_compile_options(YTTest PRIVATE
+        -Wno-c23-extensions
+        -Wno-invalid-offsetof
+        -Wno-nullability-completeness
+)
 
 set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Shaders")
 set(SPV_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Shaders/bin")
