@@ -2,9 +2,8 @@
   "name" : "yt",
   "version-string" : "1.0.0",
   "builtin-baseline" : "d5cb5b9392b89fe9ad25786022415999202277d6",
-  "vcpkg-configuration" :
-  {
-    "overlay-triplets": [ "./custom-triplets" ]
+  "vcpkg-configuration" : {
+    "overlay-triplets" : [ "./custom-triplets" ]
   },
   "dependencies" : [ {
     "name" : "freetype",
@@ -27,5 +26,8 @@
   }, {
     "name" : "plf-hive",
     "version>=" : "2021-12-11"
+  }, {
+    "name" : "glm",
+    "version>=" : "1.0.1#3"
   } ]
 }

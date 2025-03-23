@@ -10,6 +10,7 @@ module;
 #include <semaphore>
 #include <format>
 #include <unordered_map>
+#include <unordered_set>
 #include <print>
 #include <stdexcept>
 
@@ -25,6 +26,9 @@ namespace YT
 
     export template<typename K, typename V>
     using Map = std::unordered_map<K, V>;
+
+    export template<typename T>
+    using Set = std::unordered_set<T>;
 
     export template<typename K, typename V>
     using Pair = std::pair<K, V>;

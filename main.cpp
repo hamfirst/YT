@@ -27,6 +27,7 @@ public:
 
 int main()
 {
+    FatalPrint("{}", GetStructShaderDef<QuadData>());
     ApplicationInitInfo init_info
     {
         .m_ApplicationName = "YTTest"

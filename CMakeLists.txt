@@ -7,8 +7,8 @@ project(YT)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "-stdlib=libc++ -freflection")
-set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++ -freflection")
+set(CMAKE_CXX_FLAGS "-stdlib=libc++ -freflection-latest")
+set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++")
 
 find_package(Vulkan)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
@@ -18,6 +18,7 @@ find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 
 find_package(Freetype)
 find_path(PLF_HIVE_INCLUDE_DIRS "plf_hive.h")
+find_package(glm CONFIG REQUIRED)
 
 find_package(ECM CONFIG REQUIRED NO_MODULE)
 list(INSERT CMAKE_MODULE_PATH 0 ${ECM_MODULE_PATH})
@@ -77,6 +78,7 @@ target_link_libraries(YTTest PRIVATE
         unofficial::VulkanMemoryAllocator-Hpp::VulkanMemoryAllocator-Hpp
         glslang::SPIRV
         glslang::glslang-default-resource-limits
+        glm::glm
 )
 target_compile_options(YTTest PRIVATE
         -Wno-c23-extensions

@@ -86,7 +86,7 @@ VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
         }
     }
 
-    YT::PrintStr(message);
+    YT::FatalPrint("{}", message);
     return false;
 }
 
@@ -285,7 +285,6 @@ namespace YT
 
             device_extension_names.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
             device_extension_names.emplace_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-            device_extension_names.emplace_back(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
 
             vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR buffer_device_address_features(true);
 
@@ -326,12 +325,20 @@ namespace YT
             vk::FenceCreateInfo fence_create_info;
             fence_create_info.flags = vk::FenceCreateFlagBits::eSignaled;
 
-            constexpr size_t QuadBufferSize = 128 * 1024;
+            vk::CommandBufferAllocateInfo allocate_info;
+            allocate_info.commandPool = m_CommandPool.get();
+            allocate_info.level = vk::CommandBufferLevel::ePrimary;
+            allocate_info.commandBufferCount = 1;
 
-            for (FrameResource & frame_resource : m_FrameResources)
+            for (auto & frame_resource : m_FrameResources)
             {
-                frame_resource.m_QuadBuffer = MakeUnique<TransientBuffer>(m_Device, m_Allocator, QuadBufferSize);
+                frame_resource.m_Fence = m_Device->createFenceUnique(fence_create_info);
+
+                auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
+                frame_resource.m_CommandBuffer = std::move(buffer_list.front());
             }
+
+            m_QuadBufferType = RegisterBufferType(sizeof(QuadData), sizeof(QuadData), 128 * 1024);
         }
         catch (vk::SystemError& err)
         {
@@ -410,6 +417,52 @@ namespace YT
 
     bool RenderManager::RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept
     {
+        vk::Result result = vk::Result::eSuccess;
+
+        // Sync the frame
+        FrameResource & frame_resource = m_FrameResources[m_FrameIndex];
+
+        result = m_Device->waitForFences(1, &frame_resource.m_Fence.get(), true, UINT64_MAX);
+        if (result != vk::Result::eSuccess)
+        {
+            FatalPrint("Failed to wait for fences: {}", vk::to_string(result));
+            return false;
+        }
+
+        result = m_Device->resetFences(1, &frame_resource.m_Fence.get());
+        if (result != vk::Result::eSuccess)
+        {
+            FatalPrint("Failed to reset fences: {}", vk::to_string(result));
+            return false;
+        }
+
+        // Create any buffers if needed
+        while (frame_resource.m_Buffers.size() < m_BufferTypes.size())
+        {
+            try
+            {
+                size_t index = frame_resource.m_Buffers.size();
+                frame_resource.m_Buffers.emplace_back(
+                    MakeUnique<TransientBuffer>(m_Device, m_Allocator, m_BufferTypes[index].m_BufferSize));
+            }
+            catch (vk::SystemError& err)
+            {
+                FatalPrint("Failed to create buffer: {}", err.what());
+                return false;
+            }
+            catch (...)
+            {
+                FatalPrint("Failed to create buffer: unknown exception");
+                return false;
+            }
+        }
+
+        // Map all resources for writing
+        for (UniquePtr<TransientBuffer> & buffer : frame_resource.m_Buffers)
+        {
+            buffer->Begin();
+        }
+
         for (WindowResource * resource_ptr : window_resources)
         {
             WindowResource & resource = *resource_ptr;
@@ -417,17 +470,17 @@ namespace YT
             {
                 try
                 {
-                    vk::Result result = vk::Result::eSuccess;
-
                     result = m_Device->waitForFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get(), true, UINT64_MAX);
                     if (result != vk::Result::eSuccess)
                     {
+                        FatalPrint("Failed to wait for fences: {}", vk::to_string(result));
                         return false;
                     }
 
                     result = m_Device->resetFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
                     if (result != vk::Result::eSuccess)
                     {
+                        FatalPrint("Failed to reset fences: {}", vk::to_string(result));
                         return false;
                     }
 
@@ -436,6 +489,7 @@ namespace YT
                         VerbosePrint("Recreating swap chain due to requested size change");
                         if (!UpdateWindowResource(resource))
                         {
+                            FatalPrint("Failed to update swap chain due to requested size");
                             return false;
                         }
                     }
@@ -448,12 +502,14 @@ namespace YT
                         VerbosePrint("Recreating swap chain due to vulkan response");
                         if (!UpdateWindowResource(resource))
                         {
+                            FatalPrint("Failed to update swap chain due to vulkan response");
                             return false;
                         }
                     }
 
                     if (!PrepareCommandBuffer(resource))
                     {
+                        FatalPrint("Failed to prepare command buffer");
                         return false;
                     }
 
@@ -465,11 +521,40 @@ namespace YT
 
                     if (!CompleteCommandBuffer(resource))
                     {
+                        FatalPrint("Failed to complete command buffer");
                         return false;
                     }
+                }
+                catch (vk::SystemError& err)
+                {
+                    FatalPrint("Failed to render window: {}", err.what());
+                    return false;
+                }
+                catch (...)
+                {
+                    FatalPrint("Failed to render window: unknown exception");
+                    return false;
+                }
+            }
+        }
 
+        // Finalize buffers
+        for (UniquePtr<TransientBuffer> & buffer : frame_resource.m_Buffers)
+        {
+            buffer->End();
+        }
+
+        // Submit everything
+        for (WindowResource * resource_ptr : window_resources)
+        {
+            WindowResource & resource = *resource_ptr;
+            if (resource.m_Widget)
+            {
+                try
+                {
                     if (!SubmitCommandBuffer(resource))
                     {
+                        FatalPrint("Failed to submit command buffer");
                         return false;
                     }
 
@@ -478,21 +563,65 @@ namespace YT
                     {
                         resource.m_FrameIndex = 0;
                     }
-
-                    return true;
                 }
                 catch (vk::SystemError& err)
                 {
-                    FatalPrint("Failed to acquire swapchain image: {}", err.what());
+                    FatalPrint("Failed to submit window: {}", err.what());
+                    return false;
                 }
                 catch (...)
                 {
-                    FatalPrint("Failed to acquire swapchain image: unknown exception");
+                    FatalPrint("Failed to submit window: unknown exception");
+                    return false;
                 }
             }
         }
 
-        return false;
+        try
+        {
+            // Submit the frame fence
+            frame_resource.m_CommandBuffer->reset();
+
+            vk::CommandBufferBeginInfo begin_info;
+            frame_resource.m_CommandBuffer->begin(begin_info);
+
+            vk::DebugUtilsLabelEXT label_info;
+            label_info.color = std::array { 1.0f, 1.0f, 1.0f, 1.0f };
+            label_info.pLabelName = "EOF";
+            frame_resource.m_CommandBuffer->insertDebugUtilsLabelEXT(label_info);
+
+            frame_resource.m_CommandBuffer->end();
+
+            vk::PipelineStageFlags pipe_stage_flags = vk::PipelineStageFlagBits::eAllCommands;
+
+            vk::SubmitInfo submit_info;
+            submit_info.setCommandBuffers(frame_resource.m_CommandBuffer.get());
+
+            result = m_Queue.submit(1, &submit_info, frame_resource.m_Fence.get());
+            if (result != vk::Result::eSuccess)
+            {
+                FatalPrint("Failed to submit end of frame: {}", vk::to_string(result));
+                return false;
+            }
+        }
+        catch (vk::SystemError& err)
+        {
+            FatalPrint("Failed to submit window: {}", err.what());
+            return false;
+        }
+        catch (...)
+        {
+            FatalPrint("Failed to submit window: unknown exception");
+            return false;
+        }
+
+        m_FrameIndex++;
+        if (m_FrameIndex >= FrameResourceCount)
+        {
+            m_FrameIndex = 0;
+        }
+
+        return true;
     }
 
     void RenderManager::ReleaseWindowResource(WindowResource & resource) noexcept
@@ -553,6 +682,38 @@ namespace YT
         }
 
         return false;
+    }
+
+    BufferTypeId RenderManager::RegisterBufferType(
+        uint32_t element_size, uint32_t aligned_element_size, size_t buffer_size) noexcept
+    {
+        BufferTypeId buffer_type_id { .m_BufferTypeIndex = static_cast<uint32_t>(m_BufferTypes.size()) };
+        m_BufferTypes.emplace_back(
+            BufferType
+            {
+                .m_ElementSize = element_size,
+                .m_AlignedSize = aligned_element_size,
+                .m_BufferSize = buffer_size,
+            });
+
+        return buffer_type_id;
+    }
+
+    BufferTypeId RenderManager::GetQuadBufferType() const
+    {
+        return m_QuadBufferType;
+    }
+
+    BufferDataHandle RenderManager::WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept
+    {
+        TransientBuffer & buffer = *m_FrameResources[m_FrameIndex].m_Buffers[buffer_type_id.m_BufferTypeIndex];
+        uint64_t offset = buffer.WriteData(data, data_size);
+
+        return BufferDataHandle
+        {
+            .m_Type = static_cast<uint8_t>(buffer_type_id.m_BufferTypeIndex),
+            .m_Index = offset / m_BufferTypes[buffer_type_id.m_BufferTypeIndex].m_AlignedSize,
+        };
     }
 
     bool RenderManager::CreateSwapChainResources(WindowResource & resource) noexcept

@@ -24,6 +24,8 @@ namespace YT
                 vk::BufferUsageFlagBits::eStorageBuffer;
 
             vma::AllocationCreateInfo allocation_create_info;
+            allocation_create_info.flags = vma::AllocationCreateFlagBits::eMapped |
+                vma::AllocationCreateFlagBits::eHostAccessSequentialWrite;
             allocation_create_info.usage = vma::MemoryUsage::eAutoPreferHost;
 
             auto [buffer, allocation] =
@@ -32,6 +34,11 @@ namespace YT
             m_Buffer = std::move(buffer);
             m_Allocation = std::move(allocation);
         }
+
+        TransientBuffer(const TransientBuffer&) = delete;
+        TransientBuffer(TransientBuffer&&) = delete;
+        TransientBuffer& operator=(const TransientBuffer&) = delete;
+        TransientBuffer& operator=(TransientBuffer&&) = delete;
 
         bool Begin() noexcept
         {

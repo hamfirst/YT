@@ -14,6 +14,7 @@ import :RenderTypes;
 import :WindowResource;
 import :BlockTable;
 import :TransientBuffer;
+import :ShaderBuilder;
 
 namespace YT
 {
@@ -44,6 +45,11 @@ namespace YT
         [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer,
             const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept;
 
+        BufferTypeId RegisterBufferType(uint32_t element_size,
+            uint32_t aligned_element_size, size_t buffer_size) noexcept;
+        BufferTypeId GetQuadBufferType() const;
+        BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept;
+
     protected:
 ;
         [[nodiscard]] bool CreateSwapChainResources(WindowResource & resource) noexcept;
@@ -70,22 +76,25 @@ namespace YT
         vma::UniqueAllocator m_Allocator;
 
         vk::UniquePipelineLayout m_PipelineLayout;
-
         vk::UniqueCommandPool m_CommandPool;
 
         Map<const uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
 
         PSOTable m_PSOTable;
 
-        static constexpr int FrameResourceCount = 3;
+        Vector<BufferType> m_BufferTypes;
+        BufferTypeId m_QuadBufferType;
+
         struct FrameResource
         {
-            UniquePtr<TransientBuffer> m_QuadBuffer;
+            Vector<UniquePtr<TransientBuffer>> m_Buffers;
+            vk::UniqueCommandBuffer m_CommandBuffer;
+            vk::UniqueFence m_Fence;
         };
 
+        static constexpr int FrameResourceCount = 3;
         std::array<FrameResource, FrameResourceCount> m_FrameResources;
         uint32_t m_FrameIndex = 0;
-
     };
 
     export UniquePtr<RenderManager> g_RenderManager;
