@@ -88,6 +88,16 @@ namespace YT
             m_Ptr = nullptr;
         }
 
+        vk::Buffer GetBuffer() const noexcept
+        {
+            return m_Buffer.get();
+        }
+
+        size_t GetAllocationSize() const noexcept
+        {
+            return m_AllocationSize;
+        }
+
     private:
 
         vk::UniqueDevice & m_Device;

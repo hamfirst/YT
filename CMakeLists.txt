@@ -41,6 +41,7 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Delegate.ixx
         WindowTypes.ixx
         RenderTypes.ixx
+        RenderReflect.ixx
 
         Internal/RenderManager.ixx
         Internal/WindowManager.ixx

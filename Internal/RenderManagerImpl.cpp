@@ -290,12 +290,15 @@ namespace YT
 
             vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features(true, &buffer_device_address_features);
 
+            vk::PhysicalDeviceFeatures device_features;
+            device_features.shaderInt64 = true;
+
             vk::DeviceCreateInfo device_create_info(
                 vk::DeviceCreateFlags(),
                 device_queue_create_info,
                 device_layer_names,
                 device_extension_names,
-                {}, &dynamic_rendering_features);
+                &device_features, &dynamic_rendering_features);
 
             m_Device = m_PhysicalDevice.createDeviceUnique(device_create_info);
 
@@ -338,7 +341,16 @@ namespace YT
                 frame_resource.m_CommandBuffer = std::move(buffer_list.front());
             }
 
-            m_QuadBufferType = RegisterBufferType(sizeof(QuadData), sizeof(QuadData), 128 * 1024);
+            m_GlobalBufferTypeId = RegisterBufferType(sizeof(GlobalData), sizeof(GlobalData), sizeof(GlobalData));
+            m_QuadBufferTypeId = RegisterBufferType(sizeof(QuadData), sizeof(QuadData), 128 * 1024);
+
+            if (!UpdateBufferDescriptorSetInfo())
+            {
+                throw Exception("Failed to update buffer descriptor set");
+            }
+
+            m_StartTime = std::chrono::steady_clock::now();
+            m_LastRenderTime = m_StartTime;
         }
         catch (vk::SystemError& err)
         {
@@ -350,6 +362,14 @@ namespace YT
     RenderManager::~RenderManager()
     {
         m_Device->waitIdle();
+
+        for (auto & frame_resource : m_FrameResources)
+        {
+            for (const auto & func : frame_resource.m_DeletionCallbacks)
+            {
+                func();
+            }
+        }
     }
 
     bool RenderManager::CreateWindowResources(const WindowInitInfo & init_info, WindowResource & resource) noexcept
@@ -436,25 +456,9 @@ namespace YT
             return false;
         }
 
-        // Create any buffers if needed
-        while (frame_resource.m_Buffers.size() < m_BufferTypes.size())
+        if (!UpdateBufferDescriptorSetInfo())
         {
-            try
-            {
-                size_t index = frame_resource.m_Buffers.size();
-                frame_resource.m_Buffers.emplace_back(
-                    MakeUnique<TransientBuffer>(m_Device, m_Allocator, m_BufferTypes[index].m_BufferSize));
-            }
-            catch (vk::SystemError& err)
-            {
-                FatalPrint("Failed to create buffer: {}", err.what());
-                return false;
-            }
-            catch (...)
-            {
-                FatalPrint("Failed to create buffer: unknown exception");
-                return false;
-            }
+            return false;
         }
 
         // Map all resources for writing
@@ -462,6 +466,20 @@ namespace YT
         {
             buffer->Begin();
         }
+
+        auto now = std::chrono::steady_clock::now();
+        std::chrono::duration<double, std::milli> elapsed_since_start = now - m_StartTime;
+        std::chrono::duration<double, std::milli> elapsed_since_last_render = now - m_LastRenderTime;
+
+        GlobalData global_data;
+        global_data.m_Time = static_cast<float>(elapsed_since_start.count() / 1000.0);
+        global_data.m_DeltaTime = static_cast<float>(elapsed_since_last_render.count() / 1000.0);
+        global_data.m_Random1 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+        global_data.m_Random2 = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+
+        WriteToBuffer(GetGlobalBufferTypeId(), &global_data, sizeof(global_data));
+
+        m_LastRenderTime = now;
 
         for (WindowResource * resource_ptr : window_resources)
         {
@@ -515,6 +533,7 @@ namespace YT
 
                     PSODeferredSettings pso_deferred_settings;
                     pso_deferred_settings.m_SurfaceFormat = resource.m_SwapChainFormat;
+                    pso_deferred_settings.m_BufferDescriptorSetId = m_BufferDescriptorSetId;
 
                     Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), pso_deferred_settings);
                     resource.m_Widget->OnDraw(drawer);
@@ -621,6 +640,27 @@ namespace YT
             m_FrameIndex = 0;
         }
 
+        try
+        {
+            // Do any queued deletes for last frame
+            for (const auto & func : frame_resource.m_DeletionCallbacks)
+            {
+                func();
+            }
+
+            frame_resource.m_DeletionCallbacks.clear();
+        }
+        catch (vk::SystemError& err)
+        {
+            FatalPrint("Exception while running queued deletes: {}", err.what());
+            return false;
+        }
+        catch (...)
+        {
+            FatalPrint("Exception while running queued deletes: unknown exception");
+            return false;
+        }
+
         return true;
     }
 
@@ -699,9 +739,14 @@ namespace YT
         return buffer_type_id;
     }
 
-    BufferTypeId RenderManager::GetQuadBufferType() const
+    BufferTypeId RenderManager::GetGlobalBufferTypeId() const noexcept
     {
-        return m_QuadBufferType;
+        return m_GlobalBufferTypeId;
+    }
+
+    BufferTypeId RenderManager::GetQuadBufferTypeId() const noexcept
+    {
+        return m_QuadBufferTypeId;
     }
 
     BufferDataHandle RenderManager::WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept
@@ -711,8 +756,8 @@ namespace YT
 
         return BufferDataHandle
         {
-            .m_Type = static_cast<uint8_t>(buffer_type_id.m_BufferTypeIndex),
             .m_Index = offset / m_BufferTypes[buffer_type_id.m_BufferTypeIndex].m_AlignedSize,
+            .m_Type = static_cast<uint8_t>(buffer_type_id.m_BufferTypeIndex),
         };
     }
 
@@ -823,6 +868,183 @@ namespace YT
         }
 
         return nullptr;
+    }
+
+    bool RenderManager::UpdateBufferDescriptorSetInfo() noexcept
+    {
+        if (m_BufferDescriptorSetId == m_BufferTypes.size())
+        {
+            return true;
+        }
+
+        for (FrameResource & frame_resource : m_FrameResources)
+        {
+            while (frame_resource.m_Buffers.size() < m_BufferTypes.size())
+            {
+                try
+                {
+                    size_t index = frame_resource.m_Buffers.size();
+                    frame_resource.m_Buffers.emplace_back(
+                        MakeUnique<TransientBuffer>(m_Device, m_Allocator, m_BufferTypes[index].m_BufferSize));
+                }
+                catch (vk::SystemError& err)
+                {
+                    FatalPrint("Failed to create buffer: {}", err.what());
+                    return false;
+                }
+                catch (...)
+                {
+                    FatalPrint("Failed to create buffer: unknown exception");
+                    return false;
+                }
+            }
+        }
+
+        try
+        {
+            if (m_BufferDescriptorPool.get())
+            {
+                PushDeletionCallback([this, buffer_pool = m_BufferDescriptorPool.release()]() mutable
+                {
+                    m_Device->destroyDescriptorPool(buffer_pool);
+                });
+            }
+
+            if (m_BufferDescriptorSetLayout.get())
+            {
+                PushDeletionCallback([this, buffer_set_layout = m_BufferDescriptorSetLayout.release()]() mutable
+                {
+                    m_Device->destroyDescriptorSetLayout(buffer_set_layout);
+                });
+            }
+
+            if (m_PipelineLayout.get())
+            {
+                PushDeletionCallback([this, pipeline_layout = m_PipelineLayout.release()]() mutable
+                {
+                    m_Device->destroyPipelineLayout(pipeline_layout);
+                });
+            }
+
+            for (FrameResource & resource : m_FrameResources)
+            {
+                resource.m_BufferDescriptorSet = VK_NULL_HANDLE;
+            }
+
+            Vector<vk::DescriptorSetLayoutBinding> buffer_set_bindings;
+            uint32_t buffer_set_binding_index = 0;
+            for (const BufferType & buffer_type : m_BufferTypes)
+            {
+                buffer_set_bindings.emplace_back(
+                    buffer_set_binding_index, vk::DescriptorType::eStorageBuffer, 1,
+                    vk::ShaderStageFlagBits::eAll);
+
+                buffer_set_binding_index++;
+            }
+
+            vk::DescriptorSetLayoutCreateInfo buffer_set_layout_create_info;
+            buffer_set_layout_create_info.setBindings(buffer_set_bindings);
+            m_BufferDescriptorSetLayout = m_Device->createDescriptorSetLayoutUnique(buffer_set_layout_create_info);
+
+            std::array descriptor_pool_sizes =
+            {
+                vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer,
+                    m_BufferTypes.size() * FrameResourceCount)
+            };
+
+            vk::DescriptorPoolCreateInfo descriptor_pool_create_info;
+            descriptor_pool_create_info.maxSets = FrameResourceCount;
+            descriptor_pool_create_info.setPoolSizes(descriptor_pool_sizes);
+
+            m_BufferDescriptorPool = m_Device->createDescriptorPoolUnique(descriptor_pool_create_info);
+
+            std::array descriptor_set_layouts =
+            {
+                m_BufferDescriptorSetLayout.get(),
+            };
+
+            vk::DescriptorSetAllocateInfo descriptor_set_allocate_info;
+            descriptor_set_allocate_info.descriptorPool = m_BufferDescriptorPool.get();
+            descriptor_set_allocate_info.setSetLayouts(descriptor_set_layouts);
+
+            for (FrameResource & resource : m_FrameResources)
+            {
+                auto descriptor_sets = m_Device->allocateDescriptorSets(
+                    descriptor_set_allocate_info);
+
+                resource.m_BufferDescriptorSet = descriptor_sets.front();
+
+                Vector<vk::WriteDescriptorSet> write_descriptor_sets;
+                write_descriptor_sets.reserve(resource.m_Buffers.size());
+
+                Vector<vk::DescriptorBufferInfo> descriptor_buffer_infos;
+                descriptor_buffer_infos.reserve(resource.m_Buffers.size());
+
+                int binding_index = 0;
+                for (UniquePtr<TransientBuffer> & buffer : resource.m_Buffers)
+                {
+                    descriptor_buffer_infos.emplace_back(buffer->GetBuffer(), 0, buffer->GetAllocationSize());
+
+                    vk::WriteDescriptorSet & write_descriptor_set = write_descriptor_sets.emplace_back();
+                    write_descriptor_set.descriptorType = vk::DescriptorType::eStorageBuffer;
+                    write_descriptor_set.dstSet = resource.m_BufferDescriptorSet;
+                    write_descriptor_set.dstBinding = binding_index;
+                    write_descriptor_set.dstArrayElement = 0;
+                    write_descriptor_set.descriptorCount = 1;
+                    write_descriptor_set.pBufferInfo = &descriptor_buffer_infos.back();
+
+                    binding_index++;
+                }
+
+                m_Device->updateDescriptorSets(
+                    write_descriptor_sets.size(), write_descriptor_sets.data(),
+                    0, nullptr);
+            }
+
+            vk::PipelineLayoutCreateInfo layout_create_info;
+            layout_create_info.setSetLayouts(descriptor_set_layouts);
+            m_PipelineLayout = m_Device->createPipelineLayoutUnique(layout_create_info, nullptr);
+
+            m_BufferDescriptorSetId = m_BufferTypes.size();
+            return true;
+        }
+        catch (const vk::SystemError & e)
+        {
+            FatalPrint("Failed to create buffer descriptor layout: {}", e.what());
+        }
+        catch (...)
+        {
+            FatalPrint("Failed to create buffer descriptor layout: unknown error");
+        }
+
+        return false;
+    }
+
+    MaybeInvalid<vk::UniquePipelineLayout> RenderManager::CreatePipelineLayout() noexcept
+    {
+        try
+        {
+            std::array descriptor_set_layouts =
+            {
+                m_BufferDescriptorSetLayout.get(),
+            };
+
+            vk::PipelineLayoutCreateInfo layout_create_info;
+            layout_create_info.setSetLayouts(descriptor_set_layouts);
+
+            return m_Device->createPipelineLayoutUnique(layout_create_info, nullptr);
+        }
+        catch (const vk::SystemError & e)
+        {
+            FatalPrint("Failed to create pipeline layout: {}", e.what());
+        }
+        catch (...)
+        {
+            FatalPrint("Failed to create pipeline layout: unknown error");
+        }
+
+        return {};
+
     }
 
     OptionalPtr<vk::UniquePipeline> RenderManager::PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept
@@ -1034,6 +1256,11 @@ namespace YT
             command_buffer->setViewport(0, 1, &viewport);
 
             command_buffer->setScissor(0, 1, &render_area);
+
+            vk::DescriptorSet descriptor_set = m_FrameResources[m_FrameIndex].m_BufferDescriptorSet;
+            command_buffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                m_PipelineLayout.get(), 0, 1,
+                &descriptor_set, 0, nullptr);
             return true;
         }
         catch (vk::SystemError& err)

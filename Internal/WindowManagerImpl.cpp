@@ -119,6 +119,15 @@ namespace YT
         double delta_time = elapsed.count() * 1000.0;
         if (elapsed.count() > m_UpdateInterval)
         {
+            m_WindowTable->VisitAllValidHandles([&](const WindowHandleData & handle)
+            {
+                if (WindowResource* resource = m_WindowTable->ResolveHandle(handle))
+                {
+                    resource->m_WantsRedraw = true;
+                    m_HasDirtyWindows = true;
+                }
+            });
+
             m_LastFrameTime = now;
         }
     }
@@ -159,6 +168,11 @@ namespace YT
                 break;
             case 0:
                 UpdateWindows();
+
+                if (m_HasDirtyWindows)
+                {
+                    return;
+                }
                 break;
             default:
                 wl_display_roundtrip(m_Display);
@@ -169,6 +183,7 @@ namespace YT
                 {
                     return;
                 }
+                break;
             }
         }
     }
@@ -315,6 +330,7 @@ namespace YT
         }
 
         m_WindowTable->ReleaseWindowHandle(handle);
+        m_HasDirtyWindows = true;
     }
 
     void WindowManager::CloseAllWindows() noexcept

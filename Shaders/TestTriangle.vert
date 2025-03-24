@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
 layout(std140, binding = 0) uniform WidgetBlock
 {

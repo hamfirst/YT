@@ -13,6 +13,7 @@ export import :Window;
 export import :Widget;
 export import :Drawer;
 export import :RenderTypes;
+export import :RenderReflect;
 export import :WindowTypes;
 
 namespace YT
