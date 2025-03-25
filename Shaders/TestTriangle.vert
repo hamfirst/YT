@@ -1,11 +1,6 @@
 #version 450
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
-layout(std140, binding = 0) uniform WidgetBlock
-{
-    vec2 u_canvas_size;
-};
-
 vec2 positions[3] = vec2[]
 (
     vec2(0.0, -0.5),

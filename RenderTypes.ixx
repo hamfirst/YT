@@ -71,6 +71,7 @@ namespace YT
         }
     };
 
+
     export struct GlobalData
     {
         float m_Time = 0.0f;
@@ -78,6 +79,11 @@ namespace YT
 
         float m_Random1 = 0.0f;
         float m_Random2 = 0.0f;
+    };
+
+    export struct QuadRenderTypeId
+    {
+        int m_QuadRenderTypeIndex = 0;
     };
 
     export struct QuadData

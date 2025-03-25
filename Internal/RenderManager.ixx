@@ -34,13 +34,10 @@ namespace YT
         bool RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept;
         void ReleaseWindowResource(WindowResource & resource) noexcept;
 
-        template <int ArraySize>
-        void RegisterShader(uint8_t (&shader_data)[ArraySize]) noexcept
-        {
-            RegisterShader(shader_data, ArraySize);
-        }
-
         void RegisterShader(uint8_t* shader_data, std::size_t shader_data_size) noexcept;
+        void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
+        [[nodiscard]] bool CompileShader(const StringView & shader_code,
+            const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data) noexcept;
 
         MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
         [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer,
@@ -76,6 +73,7 @@ namespace YT
 
     private:
 
+        // Vulkan data
         vk::UniqueInstance m_Instance;
 
 #if !defined(NDEBUG)
@@ -88,18 +86,28 @@ namespace YT
         vma::UniqueAllocator m_Allocator;
         vk::UniqueCommandPool m_CommandPool;
 
+        // Timers
         std::chrono::time_point<std::chrono::steady_clock> m_StartTime;
         std::chrono::time_point<std::chrono::steady_clock> m_LastRenderTime;
 
+        // Shaders
         Map<const uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
+        ShaderBuilder m_ShaderBuilder;
 
+        // PSOs
         PSOTable m_PSOTable;
+        vk::UniquePipelineLayout m_PipelineLayout;
 
+        // Dynamic buffer data
         Vector<BufferType> m_BufferTypes;
 
         BufferTypeId m_GlobalBufferTypeId;
-        BufferTypeId m_QuadBufferTypeId;
 
+        vk::UniqueDescriptorSetLayout m_BufferDescriptorSetLayout;
+        vk::UniqueDescriptorPool m_BufferDescriptorPool;
+        size_t m_BufferDescriptorSetId = 0;
+
+        // Frame resources
         struct FrameResource
         {
             Vector<UniquePtr<TransientBuffer>> m_Buffers;
@@ -110,12 +118,6 @@ namespace YT
 
             Vector<Function<void()>> m_DeletionCallbacks;
         };
-
-        vk::UniqueDescriptorSetLayout m_BufferDescriptorSetLayout;
-        vk::UniqueDescriptorPool m_BufferDescriptorPool;
-        size_t m_BufferDescriptorSetId = 0;
-
-        vk::UniquePipelineLayout m_PipelineLayout;
 
         static constexpr int FrameResourceCount = 3;
         std::array<FrameResource, FrameResourceCount> m_FrameResources;

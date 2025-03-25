@@ -197,6 +197,8 @@ namespace YT
 		static bool GLSLtoSPV(const vk::ShaderStageFlagBits shader_type, const char * shader_code,
 		                      std::vector<unsigned int> & spirv)
 		{
+			VerbosePrint("Compiling shader:\n{}", shader_code);
+
 			EShLanguage stage = FindLanguage(shader_type);
 			glslang::TShader shader(stage);
 			glslang::TProgram program;

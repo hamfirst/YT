@@ -342,7 +342,6 @@ namespace YT
             }
 
             m_GlobalBufferTypeId = RegisterBufferType(sizeof(GlobalData), sizeof(GlobalData), sizeof(GlobalData));
-            m_QuadBufferTypeId = RegisterBufferType(sizeof(QuadData), sizeof(QuadData), 128 * 1024);
 
             if (!UpdateBufferDescriptorSetInfo())
             {
@@ -688,6 +687,18 @@ namespace YT
         m_ShaderModules.emplace(shader_data, m_Device->createShaderModuleUnique(shader_module_create_info));
     }
 
+    void RenderManager::SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept
+    {
+        m_ShaderBuilder.SetInclude(include_name, include_code);
+    }
+
+    bool RenderManager::CompileShader(const StringView & shader_code, const StringView & file_name_for_log_output,
+        Vector<uint32_t> & out_shader_data) noexcept
+    {
+        return m_ShaderBuilder.BuildShader(vk::ShaderStageFlagBits::eFragment, file_name_for_log_output,
+            shader_code, out_shader_data);
+    }
+
     MaybeInvalid<PSOHandle> RenderManager::RegisterPSO(const PSOCreateInfo & create_info) noexcept
     {
         return MakeCustomBlockTableHandle<PSOHandle>(m_PSOTable.AllocateHandle(
@@ -742,11 +753,6 @@ namespace YT
     BufferTypeId RenderManager::GetGlobalBufferTypeId() const noexcept
     {
         return m_GlobalBufferTypeId;
-    }
-
-    BufferTypeId RenderManager::GetQuadBufferTypeId() const noexcept
-    {
-        return m_QuadBufferTypeId;
     }
 
     BufferDataHandle RenderManager::WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept

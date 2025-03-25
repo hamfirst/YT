@@ -52,12 +52,14 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Internal/BlockTable.ixx
         Internal/TransientBuffer.ixx
         Internal/ShaderBuilder.ixx
+        Internal/RenderQuad.ixx
 
         Internal/InitImpl.cpp
         Internal/DrawerImpl.cpp
         Internal/WindowImpl.cpp
         Internal/WindowManagerImpl.cpp
         Internal/RenderManagerImpl.cpp
+        Internal/RenderReflectImpl.cpp
         Internal/YTImpl.cpp
 )
 

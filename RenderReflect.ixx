@@ -8,6 +8,7 @@ module;
 export module YT:RenderReflect;
 
 import :Types;
+import :RenderTypes;
 
 namespace YT
 {
@@ -36,7 +37,7 @@ namespace YT
     // end 'expand' definition
 
     export template <typename T>
-    constexpr String GetStructShaderDef() noexcept
+    constexpr String GetShaderStructDef() noexcept
     {
         constexpr auto class_info = ^^T;
         constexpr auto class_name = std::meta::identifier_of(class_info);
@@ -197,5 +198,23 @@ namespace YT
             "\n",
             set, binding, class_name, class_name, class_name, class_name, class_name, binding, class_name, class_name);
     }
+
+    BufferTypeId RegisterShaderStruct(size_t struct_size, size_t struct_aligned_size, size_t max_elements_per_frame) noexcept;
+    void RegisterShaderInclude(const StringView & struct_name, const StringView & shader_code) noexcept;
+
+    export template <typename T>
+    BufferTypeId RegisterShaderStruct(size_t max_elements_per_frame, int descriptor_set = 0) noexcept
+    {
+        StringView class_name = std::meta::identifier_of(^^T);
+        BufferTypeId type_id = RegisterShaderStruct(sizeof(T), sizeof(T), max_elements_per_frame);
+
+        String shader_code = GetShaderStructDef<T>() +
+            GetShaderBufferDef<T>(descriptor_set, type_id.m_BufferTypeIndex);
+
+        RegisterShaderInclude(class_name, shader_code);
+
+        return type_id;
+    }
+
 
 }
