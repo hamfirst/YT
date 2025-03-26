@@ -1,12 +1,12 @@
 void main()
 {
-    GlobalData global_data = GlobalDataBuffer.elems[0];
-    QuadData quad_data = GetQuadData(v_quad_data);
+    GlobalData global_data = GlobalData_buffer.elems[0];
+    QuadData quad_data = QuadData_buffer.elems[v_quad_data_index];
 
     switch(quad_data.m_Mode)
     {
         default:
-            o_color = vec4(v_color.x, v_color.y, s, 1.0);
+            o_color = quad_data.m_Color;
             return;
 
         // case statements filled in dynamically

@@ -16,6 +16,7 @@ import :WindowResource;
 import :BlockTable;
 import :TransientBuffer;
 import :ShaderBuilder;
+import :Delegate;
 
 namespace YT
 {
@@ -28,6 +29,10 @@ namespace YT
         ~RenderManager();
 
     public:
+
+        Delegate<void ()> & GetPreRenderDelegate() noexcept { return m_PreRenderDelegate; }
+        Delegate<void ()> & GetPostRenderDelegate() noexcept { return m_PostRenderDelegate; };
+
         bool CreateWindowResources(const WindowInitInfo & init_info, WindowResource & resource) noexcept;
         bool UpdateWindowResource(WindowResource & resource) noexcept;
 
@@ -48,11 +53,11 @@ namespace YT
             uint32_t aligned_element_size, size_t buffer_size) noexcept;
 
         BufferTypeId GetGlobalBufferTypeId() const noexcept;
-        BufferTypeId GetQuadBufferTypeId() const noexcept;
 
         BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept;
 
         void RegisterRenderGlobals();
+
 
     protected:
 ;
@@ -92,6 +97,10 @@ namespace YT
         // Timers
         std::chrono::time_point<std::chrono::steady_clock> m_StartTime;
         std::chrono::time_point<std::chrono::steady_clock> m_LastRenderTime;
+
+        // Delegates
+        Delegate<void ()> m_PreRenderDelegate;
+        Delegate<void ()> m_PostRenderDelegate;
 
         // Shaders
         Map<const uint8_t*, vk::UniqueShaderModule> m_ShaderModules;

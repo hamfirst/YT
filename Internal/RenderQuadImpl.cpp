@@ -62,6 +62,8 @@ namespace YT
         {
             throw Exception("Failed to compile quad shader code");
         }
+
+        g_RenderManager->GetPreRenderDelegate().BindNoValidityCheck([this]() { UpdateShader(); });
     }
 
     QuadRenderTypeId RenderQuad::RegisterQuadShader(const StringView & function_name, const StringView & shader_code) noexcept
@@ -85,7 +87,13 @@ namespace YT
     {
         if (m_NeedsRecompile)
         {
-            Recompile();
+            if (Recompile())
+            {
+                PSOCreateInfo pso_info;
+                pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_VertexShaderBinary.data());
+                pso_info.m_FragmentShader = reinterpret_cast<uint8_t *>(m_FragmentShaderBinary.data());
+                m_PSOHandle = g_RenderManager->RegisterPSO(pso_info);
+            }
             m_NeedsRecompile = false;
         }
     }

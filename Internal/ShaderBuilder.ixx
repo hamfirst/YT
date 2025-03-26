@@ -38,12 +38,17 @@ namespace YT
 		bool BuildShader(const vk::ShaderStageFlagBits shader_type, const StringView & file_name,
 			const StringView & shader_code, std::vector<unsigned int> & spirv)
 		{
-			String result, error;
+		String result, error;
 			Set<String> already_included;
 			if (!ReplaceIncludes(shader_code, file_name, already_included, result, error))
 			{
 				FatalPrint("{}", error);
 				return false;
+			}
+
+			for (size_t pos = result.find("\t"); pos != std::string::npos; pos = result.find("\t", pos + 1))
+			{
+				result.replace(pos, 1, "  ");
 			}
 
 			return GLSLtoSPV(shader_type, result.data(), spirv);
@@ -108,7 +113,9 @@ namespace YT
 			int line_number = 1;
 			for (const auto line : std::views::split(shader_code, delim))
 			{
-				StringView line_view = TrimStart(StringView(line.begin(), line.end()));
+
+				StringView line_view = StringView(line.begin(), line.end());
+
 				if (line_view.starts_with(include_directive))
 				{
 					StringView include(TrimStart(StringView(line_view.begin() + include_directive.size(), line_view.end())));
@@ -177,6 +184,8 @@ namespace YT
 
 						result.append(include_code);
 						result.append(remainder);
+
+						result.append(Format("#line {}\n", line_number));
 					}
 					else
 					{

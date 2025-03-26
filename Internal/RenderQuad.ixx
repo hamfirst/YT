@@ -40,7 +40,7 @@ namespace YT
         Vector<ShaderData> m_ShaderData;
         Vector<uint32_t> m_VertexShaderBinary;
         Vector<uint32_t> m_FragmentShaderBinary;
-        bool m_NeedsRecompile = false;
+        bool m_NeedsRecompile = true;
     };
 
     UniquePtr<RenderQuad> g_RenderQuad;

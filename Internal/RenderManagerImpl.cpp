@@ -454,6 +454,8 @@ namespace YT
             return false;
         }
 
+        m_PreRenderDelegate.Execute();
+
         if (!UpdateBufferDescriptorSetInfo())
         {
             return false;
@@ -659,6 +661,7 @@ namespace YT
             return false;
         }
 
+        m_PostRenderDelegate.Execute();
         return true;
     }
 
