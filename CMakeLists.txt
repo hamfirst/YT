@@ -60,6 +60,7 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Internal/WindowManagerImpl.cpp
         Internal/RenderManagerImpl.cpp
         Internal/RenderReflectImpl.cpp
+        Internal/RenderQuadImpl.cpp
         Internal/YTImpl.cpp
 )
 

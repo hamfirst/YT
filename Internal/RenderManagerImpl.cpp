@@ -39,6 +39,7 @@ import :RenderTypes;
 import :WindowResource;
 import :WindowManager;
 import :RenderManager;
+import :RenderReflect;
 import :Drawer;
 
 VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
@@ -340,8 +341,6 @@ namespace YT
                 auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
                 frame_resource.m_CommandBuffer = std::move(buffer_list.front());
             }
-
-            m_GlobalBufferTypeId = RegisterBufferType(sizeof(GlobalData), sizeof(GlobalData), sizeof(GlobalData));
 
             if (!UpdateBufferDescriptorSetInfo())
             {
@@ -674,7 +673,7 @@ namespace YT
         resource.m_VkSurface.reset();
     }
 
-    void RenderManager::RegisterShader(uint8_t* shader_data, std::size_t shader_data_size) noexcept
+    void RenderManager::RegisterShader(const uint8_t* shader_data, std::size_t shader_data_size) noexcept
     {
         if (m_ShaderModules.contains(shader_data))
         {
@@ -682,9 +681,22 @@ namespace YT
         }
 
         vk::ShaderModuleCreateInfo shader_module_create_info;
-        shader_module_create_info.pCode = reinterpret_cast<uint32_t*>(shader_data);
+        shader_module_create_info.pCode = reinterpret_cast<const uint32_t*>(shader_data);
         shader_module_create_info.codeSize = shader_data_size;
         m_ShaderModules.emplace(shader_data, m_Device->createShaderModuleUnique(shader_module_create_info));
+    }
+
+    void RenderManager::UnregisterShader(const uint8_t * shader_data) noexcept
+    {
+        if (auto shader_module = m_ShaderModules.find(shader_data); shader_module != m_ShaderModules.end())
+        {
+            PushDeletionCallback([this, shader_module_ptr = shader_module->second.release()]()
+            {
+               m_Device->destroyShaderModule(shader_module_ptr);
+            });
+
+            m_ShaderModules.erase(shader_module);
+        }
     }
 
     void RenderManager::SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept
@@ -692,10 +704,21 @@ namespace YT
         m_ShaderBuilder.SetInclude(include_name, include_code);
     }
 
-    bool RenderManager::CompileShader(const StringView & shader_code, const StringView & file_name_for_log_output,
-        Vector<uint32_t> & out_shader_data) noexcept
+    bool RenderManager::CompileShader(const StringView & shader_code, ShaderType type,
+        const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data) noexcept
     {
-        return m_ShaderBuilder.BuildShader(vk::ShaderStageFlagBits::eFragment, file_name_for_log_output,
+        vk::ShaderStageFlagBits vk_shader_type = vk::ShaderStageFlagBits::eFragment;
+        switch (type)
+        {
+            case ShaderType::Vertex:
+                vk_shader_type = vk::ShaderStageFlagBits::eVertex;
+                break;
+            case ShaderType::Fragment:
+                vk_shader_type = vk::ShaderStageFlagBits::eFragment;
+                break;
+        }
+
+        return m_ShaderBuilder.BuildShader(vk_shader_type, file_name_for_log_output,
             shader_code, out_shader_data);
     }
 
@@ -765,6 +788,11 @@ namespace YT
             .m_Index = offset / m_BufferTypes[buffer_type_id.m_BufferTypeIndex].m_AlignedSize,
             .m_Type = static_cast<uint8_t>(buffer_type_id.m_BufferTypeIndex),
         };
+    }
+
+    void RenderManager::RegisterRenderGlobals()
+    {
+        m_GlobalBufferTypeId = RegisterShaderBufferStruct<GlobalData>(1);
     }
 
     bool RenderManager::CreateSwapChainResources(WindowResource & resource) noexcept

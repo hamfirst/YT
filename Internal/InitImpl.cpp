@@ -5,6 +5,7 @@ module YT:InitImpl;
 import :Types;
 import :WindowManager;
 import :RenderManager;
+import :RenderQuad;
 
 namespace YT
 {
@@ -16,6 +17,13 @@ namespace YT
         }
 
         if (!RenderManager::CreateRenderManager(init_info))
+        {
+            return false;
+        }
+
+        g_RenderManager->RegisterRenderGlobals();
+
+        if (!RenderQuad::CreateRenderQuad(init_info))
         {
             return false;
         }

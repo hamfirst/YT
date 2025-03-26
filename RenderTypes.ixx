@@ -12,6 +12,12 @@ import :BlockTable;
 
 namespace YT
 {
+    export enum class ShaderType
+    {
+        Vertex,
+        Fragment,
+    };
+
     export struct PSOCreateInfo final
     {
         // You must set either vertex or mesh shader
@@ -99,6 +105,12 @@ namespace YT
         uint32_t m_Mode = 0;
         uint32_t m_Flags = 0;
         uint64_t m_ExtraData = 0;
+    };
+
+    export struct QuadRenderData
+    {
+        int m_QuadIndex = 0;
+        int m_Count = 0;
     };
 
 }

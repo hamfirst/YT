@@ -19,7 +19,7 @@ import :ShaderBuilder;
 
 namespace YT
 {
-    export class RenderManager final
+    class RenderManager final
     {
     public:
         static bool CreateRenderManager(const ApplicationInitInfo & init_info) noexcept;
@@ -34,9 +34,10 @@ namespace YT
         bool RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept;
         void ReleaseWindowResource(WindowResource & resource) noexcept;
 
-        void RegisterShader(uint8_t* shader_data, std::size_t shader_data_size) noexcept;
+        void RegisterShader(const uint8_t* shader_data, std::size_t shader_data_size) noexcept;
+        void UnregisterShader(const uint8_t* shader_data) noexcept;
         void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
-        [[nodiscard]] bool CompileShader(const StringView & shader_code,
+        [[nodiscard]] bool CompileShader(const StringView & shader_code, ShaderType type,
             const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data) noexcept;
 
         MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
@@ -50,6 +51,8 @@ namespace YT
         BufferTypeId GetQuadBufferTypeId() const noexcept;
 
         BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept;
+
+        void RegisterRenderGlobals();
 
     protected:
 ;
@@ -125,6 +128,6 @@ namespace YT
     };
 
 
-    export UniquePtr<RenderManager> g_RenderManager;
+    UniquePtr<RenderManager> g_RenderManager;
 
 }

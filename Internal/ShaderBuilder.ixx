@@ -1,7 +1,7 @@
 
 module;
 
-
+#include <string>
 #include <ranges>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
@@ -155,8 +155,8 @@ namespace YT
 						return false;
 					}
 
-					String include_name(include_char, include_end);
-					StringView remainder(include_end, line.end());
+					String include_name(include_start, include_char);
+					StringView remainder(include_char + 1, line.end());
 
 					if (auto itr = m_Includes.find(include_name); itr != m_Includes.end())
 					{
@@ -173,12 +173,14 @@ namespace YT
 							return false;
 						}
 
+						VerbosePrint("Include code {}\n", include_code);
+
 						result.append(include_code);
 						result.append(remainder);
 					}
 					else
 					{
-						error = std::format("error: {}:{} unknown include file {}", file_name, line_number, include_name);
+						error = Format("error: {}:{} unknown include file \"{}\"", file_name, line_number, include_name);
 						return false;
 					}
 				}

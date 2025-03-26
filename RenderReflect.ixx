@@ -181,13 +181,13 @@ namespace YT
             "layout(std140, set = {}, binding = {}) readonly buffer {}BufferType\n"
             "{{\n"
             "    {} elems[];\n"
-            "}} {}Buffer;\n"
+            "}} {}_buffer;\n"
             "\n"
             "{} Get{}(uint64_t handle)\n"
             "{{\n"
             "    if(uint(((handle & 0xFF00000000000000UL) >> 56)) == {}U)\n"
             "    {{\n"
-            "        return {}Buffer.elems[uint(handle & 0x00FFFFFFFFFFFFFFUL)];\n"
+            "        return {}_buffer.elems[uint(handle & 0x00FFFFFFFFFFFFFFUL)];\n"
             "    }}\n"
             "    else\n"
             "    {{\n"
@@ -203,7 +203,14 @@ namespace YT
     void RegisterShaderInclude(const StringView & struct_name, const StringView & shader_code) noexcept;
 
     export template <typename T>
-    BufferTypeId RegisterShaderStruct(size_t max_elements_per_frame, int descriptor_set = 0) noexcept
+    void RegisterShaderType() noexcept
+    {
+        StringView class_name = std::meta::identifier_of(^^T);
+        RegisterShaderInclude(class_name, GetShaderStructDef<T>());
+    }
+
+    export template <typename T>
+    BufferTypeId RegisterShaderBufferStruct(size_t max_elements_per_frame, int descriptor_set = 0) noexcept
     {
         StringView class_name = std::meta::identifier_of(^^T);
         BufferTypeId type_id = RegisterShaderStruct(sizeof(T), sizeof(T), max_elements_per_frame);

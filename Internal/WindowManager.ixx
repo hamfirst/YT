@@ -20,7 +20,7 @@ import :Delegate;
 
 namespace YT
 {
-    export class WindowManager final
+    class WindowManager final
     {
     public:
         static bool CreateWindowManager(const ApplicationInitInfo & init_info) noexcept;
@@ -92,6 +92,6 @@ namespace YT
         bool m_HasDirtyWindows = false;
     };
 
-    export UniquePtr<WindowManager> g_WindowManager;
+    UniquePtr<WindowManager> g_WindowManager;
 
 }
