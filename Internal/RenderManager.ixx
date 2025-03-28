@@ -46,7 +46,7 @@ namespace YT
             const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data) noexcept;
 
         MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
-        [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer,
+        [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, size_t push_data_size,
             const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept;
 
         BufferTypeId RegisterBufferType(uint32_t element_size,
@@ -55,6 +55,9 @@ namespace YT
         BufferTypeId GetGlobalBufferTypeId() const noexcept;
 
         BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept;
+
+        [[nodiscard]] MaybeInvalid<Pair<std::byte *, BufferDataHandle>> ReserveBufferSpace(
+            BufferTypeId buffer_type_id, uint32_t buffer_size) noexcept;
 
         void RegisterRenderGlobals();
 
@@ -66,8 +69,7 @@ namespace YT
         [[nodiscard]] OptionalPtr<vk::UniqueShaderModule> FindShaderModule(const uint8_t * shader_data) noexcept;
 
         [[nodiscard]] bool UpdateBufferDescriptorSetInfo() noexcept;
-        [[nodiscard]] MaybeInvalid<vk::UniquePipelineLayout> CreatePipelineLayout() noexcept;
-        [[nodiscard]] OptionalPtr<vk::UniquePipeline> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
+        [[nodiscard]] OptionalPtr<PSOVariant> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
 
         [[nodiscard]] bool PrepareCommandBuffer(const WindowResource & resource) noexcept;
         [[nodiscard]] bool CompleteCommandBuffer(const WindowResource & resource) noexcept;
@@ -108,7 +110,6 @@ namespace YT
 
         // PSOs
         PSOTable m_PSOTable;
-        vk::UniquePipelineLayout m_PipelineLayout;
 
         // Dynamic buffer data
         Vector<BufferType> m_BufferTypes;
@@ -135,6 +136,7 @@ namespace YT
         std::array<FrameResource, FrameResourceCount> m_FrameResources;
         uint32_t m_FrameIndex = 0;
     };
+
 
 
     UniquePtr<RenderManager> g_RenderManager;

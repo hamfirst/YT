@@ -52,7 +52,8 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Internal/BlockTable.ixx
         Internal/TransientBuffer.ixx
         Internal/ShaderBuilder.ixx
-        Internal/RenderQuad.ixx
+        Internal/QuadRender.ixx
+        Internal/DrawCombiner.ixx
 
         Internal/InitImpl.cpp
         Internal/DrawerImpl.cpp
@@ -60,7 +61,7 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Internal/WindowManagerImpl.cpp
         Internal/RenderManagerImpl.cpp
         Internal/RenderReflectImpl.cpp
-        Internal/RenderQuadImpl.cpp
+        Internal/QuadRenderImpl.cpp
         Internal/YTImpl.cpp
 )
 

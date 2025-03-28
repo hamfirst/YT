@@ -67,6 +67,25 @@ namespace YT
             return start;
         }
 
+        MaybeInvalid<Pair<std::byte *, uint64_t>> ReserveSpace(size_t size) noexcept
+        {
+            if (!m_Ptr)
+            {
+                FatalPrint("Buffer is null");
+                return MakePair(nullptr, UINT64_MAX);
+            }
+
+            uint64_t start = m_BufferSize.fetch_add(size);
+
+            if (start + size > m_AllocationSize)
+            {
+                FatalPrint("Buffer is not big enough");
+                return MakePair(nullptr, UINT64_MAX);
+            }
+
+            return MakePair(m_Ptr + start, start);
+        }
+
         [[nodiscard]] size_t GetSize() const noexcept
         {
             return m_BufferSize;

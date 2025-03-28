@@ -30,6 +30,7 @@ namespace YT
         RequiredPtr<const uint8_t> m_FragmentShader = nullptr;
         StringView m_FragmentShaderEntryPoint = "main";
 
+        int m_PushConstantsSize = 0;
         Vector<Pair<String, String>> m_FeatureConstants;
     };
 
@@ -42,10 +43,17 @@ namespace YT
         bool operator!=(const PSODeferredSettings &) const = default;
     };
 
+    export struct PSOVariant
+    {
+        PSODeferredSettings m_DeferredSettings;
+        vk::UniquePipelineLayout m_Layout;
+        vk::UniquePipeline m_Pipeline;
+    };
+
     export struct PSO
     {
         PSOCreateInfo m_CreateInfo;
-        Vector<Pair<PSODeferredSettings, vk::UniquePipeline>> m_Pipelines;
+        Vector<PSOVariant> m_Variants;
     };
 
     export using PSOTable = BlockTable<PSO>;
@@ -111,6 +119,13 @@ namespace YT
     {
         int m_QuadIndex = 0;
         int m_Count = 0;
+    };
+
+    export struct DrawerData
+    {
+        glm::vec2 m_ViewportSize;
+        glm::vec2 m_Offset;
+        glm::vec2 m_Size;
     };
 
 }

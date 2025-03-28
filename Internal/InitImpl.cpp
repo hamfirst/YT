@@ -5,7 +5,7 @@ module YT:InitImpl;
 import :Types;
 import :WindowManager;
 import :RenderManager;
-import :RenderQuad;
+import :QuadRender;
 
 namespace YT
 {
@@ -23,7 +23,7 @@ namespace YT
 
         g_RenderManager->RegisterRenderGlobals();
 
-        if (!RenderQuad::CreateRenderQuad(init_info))
+        if (!QuadRender::CreateQuadRender(init_info))
         {
             return false;
         }

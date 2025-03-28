@@ -3,7 +3,7 @@ module;
 #include <vector>
 #include <cstdint>
 
-module YT:RenderQuad;
+module YT:QuadRender;
 
 import :RenderManager;
 import :RenderTypes;
@@ -11,19 +11,21 @@ import :RenderReflect;
 
 namespace YT
 {
-    class RenderQuad
+    class QuadRender
     {
     public:
 
-        static bool CreateRenderQuad(const ApplicationInitInfo & init_info) noexcept;
+        static bool CreateQuadRender(const ApplicationInitInfo & init_info) noexcept;
 
-        RenderQuad(const ApplicationInitInfo & init_info);
+        explicit QuadRender(const ApplicationInitInfo & init_info);
+
+        [[nodiscard]] BufferTypeId GetQuadBufferTypeUd() const noexcept;
+        [[nodiscard]] PSOHandle GetQuadPSOHandle() const noexcept;
 
         QuadRenderTypeId RegisterQuadShader(const StringView & function_name, const StringView & shader_code) noexcept;
-        void UpdateShader() noexcept;
 
     private:
-
+        void UpdateShader() noexcept;
         bool Recompile() noexcept;
 
     private:
@@ -43,5 +45,5 @@ namespace YT
         bool m_NeedsRecompile = true;
     };
 
-    UniquePtr<RenderQuad> g_RenderQuad;
+    UniquePtr<QuadRender> g_QuadRender;
 }

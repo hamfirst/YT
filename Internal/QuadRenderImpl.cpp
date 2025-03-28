@@ -3,12 +3,12 @@ module;
 #include <vector>
 #include <cstdint>
 
-module YT:RenderQuadImpl;
+module YT:QuadRenderImpl;
 
 import :RenderManager;
 import :RenderTypes;
 import :RenderReflect;
-import :RenderQuad;
+import :QuadRender;
 
 namespace YT
 {
@@ -32,11 +32,11 @@ namespace YT
 #embed "../Shaders/Quad/Footer.qfrag"
     };
 
-    bool RenderQuad::CreateRenderQuad(const ApplicationInitInfo & init_info) noexcept
+    bool QuadRender::CreateQuadRender(const ApplicationInitInfo & init_info) noexcept
     {
         try
         {
-            g_RenderQuad = MakeUnique<RenderQuad>(init_info);
+            g_QuadRender = MakeUnique<QuadRender>(init_info);
             return true;
         }
         catch (const Exception & e)
@@ -51,7 +51,7 @@ namespace YT
         return false;
     }
 
-    RenderQuad::RenderQuad(const ApplicationInitInfo & init_info)
+    QuadRender::QuadRender(const ApplicationInitInfo & init_info)
     {
         RegisterShaderType<QuadRenderData>();
         m_QuadBufferTypeId = RegisterShaderBufferStruct<QuadData>(64 * 1024);
@@ -60,13 +60,26 @@ namespace YT
         if (!g_RenderManager->CompileShader(vertex_shader,
             ShaderType::Vertex, "QuadShader_VS", m_VertexShaderBinary))
         {
-            throw Exception("Failed to compile quad shader code");
+            throw Exception("Failed to compile quad vertex shader code");
         }
+
+        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_VertexShaderBinary.data()),
+            m_VertexShaderBinary.size() * sizeof(m_VertexShaderBinary[0]));
 
         g_RenderManager->GetPreRenderDelegate().BindNoValidityCheck([this]() { UpdateShader(); });
     }
 
-    QuadRenderTypeId RenderQuad::RegisterQuadShader(const StringView & function_name, const StringView & shader_code) noexcept
+    BufferTypeId QuadRender::GetQuadBufferTypeUd() const noexcept
+    {
+        return m_QuadBufferTypeId;
+    }
+
+    PSOHandle QuadRender::GetQuadPSOHandle() const noexcept
+    {
+        return m_PSOHandle;
+    }
+
+    QuadRenderTypeId QuadRender::RegisterQuadShader(const StringView & function_name, const StringView & shader_code) noexcept
     {
         QuadRenderTypeId new_type_id
         {
@@ -83,7 +96,7 @@ namespace YT
         return new_type_id;
     }
 
-    void RenderQuad::UpdateShader() noexcept
+    void QuadRender::UpdateShader() noexcept
     {
         if (m_NeedsRecompile)
         {
@@ -92,13 +105,14 @@ namespace YT
                 PSOCreateInfo pso_info;
                 pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_VertexShaderBinary.data());
                 pso_info.m_FragmentShader = reinterpret_cast<uint8_t *>(m_FragmentShaderBinary.data());
+                pso_info.m_PushConstantsSize = sizeof(QuadRenderData);
                 m_PSOHandle = g_RenderManager->RegisterPSO(pso_info);
             }
             m_NeedsRecompile = false;
         }
     }
 
-    bool RenderQuad::Recompile() noexcept
+    bool QuadRender::Recompile() noexcept
     {
         constexpr StringView header(g_QuadHeader_FS, sizeof(g_QuadHeader_FS));
         constexpr StringView main(g_QuadMain_FS, sizeof(g_QuadMain_FS));

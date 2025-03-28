@@ -4,6 +4,8 @@ module;
 #include <iostream>
 #include <unordered_map>
 
+#include <glm/glm.hpp>
+
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
@@ -312,10 +314,6 @@ namespace YT
             command_pool_create_info.queueFamilyIndex = best_queue_index.value();
             m_CommandPool = m_Device->createCommandPoolUnique(command_pool_create_info);
 
-            // create a generic layout
-            vk::PipelineLayoutCreateInfo layout_create_info;
-            m_PipelineLayout = m_Device->createPipelineLayoutUnique(layout_create_info, nullptr);
-
             // create the vma allocator
             vma::AllocatorCreateInfo allocator_create_info;
             allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
@@ -531,11 +529,16 @@ namespace YT
                         return false;
                     }
 
+                    DrawerData drawer_data;
+                    drawer_data.m_ViewportSize = glm::vec2(resource_ptr->m_SwapChainExtent.width, resource_ptr->m_SwapChainExtent.height);
+                    drawer_data.m_Size = drawer_data.m_ViewportSize;
+                    drawer_data.m_Offset = glm::vec2(0.0f);
+
                     PSODeferredSettings pso_deferred_settings;
                     pso_deferred_settings.m_SurfaceFormat = resource.m_SwapChainFormat;
                     pso_deferred_settings.m_BufferDescriptorSetId = m_BufferDescriptorSetId;
 
-                    Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), pso_deferred_settings);
+                    Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), drawer_data, pso_deferred_settings);
                     resource.m_Widget->OnDraw(drawer);
 
                     if (!CompleteCommandBuffer(resource))
@@ -734,8 +737,8 @@ namespace YT
             }));
     }
 
-    bool RenderManager::BindPSO(vk::CommandBuffer & command_buffer,
-        const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept
+    bool RenderManager::BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, size_t push_data_size,
+                                const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept
     {
         PSO * pso = m_PSOTable.ResolveHandle(handle);
         if (!pso)
@@ -743,22 +746,36 @@ namespace YT
             return false;
         }
 
-        for (Pair<PSODeferredSettings, vk::UniquePipeline> & pipeline_info : pso->m_Pipelines)
+        PSOVariant * target_variant = nullptr;
+        for (PSOVariant & variant : pso->m_Variants)
         {
-            if (pipeline_info.first == deferred_settings)
+            if (variant.m_DeferredSettings == deferred_settings)
             {
-                command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_info.second.get());
-                return true;
+                target_variant = &variant;
             }
         }
 
-        if (vk::UniquePipeline * pipeline = PreparePSO(deferred_settings, *pso))
+        if (!target_variant)
         {
-            command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->get());
-            return true;
+            if (target_variant = PreparePSO(deferred_settings, *pso); !target_variant)
+            {
+                return false;
+            }
         }
 
-        return false;
+        vk::DescriptorSet descriptor_set = m_FrameResources[m_FrameIndex].m_BufferDescriptorSet;
+        command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+            target_variant->m_Layout.get(), 0, 1,
+            &descriptor_set, 0, nullptr);
+
+        if (push_data_size > 0 && push_data != nullptr)
+        {
+            command_buffer.pushConstants(target_variant->m_Layout.get(),
+                vk::ShaderStageFlagBits::eAll, 0, push_data_size, push_data);
+        }
+
+        command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, target_variant->m_Pipeline.get());
+        return true;
     }
 
     BufferTypeId RenderManager::RegisterBufferType(
@@ -783,14 +800,29 @@ namespace YT
 
     BufferDataHandle RenderManager::WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept
     {
-        TransientBuffer & buffer = *m_FrameResources[m_FrameIndex].m_Buffers[buffer_type_id.m_BufferTypeIndex];
-        uint64_t offset = buffer.WriteData(data, data_size);
+        auto [ptr, buffer_handle] = ReserveBufferSpace(buffer_type_id, data_size);
 
-        return BufferDataHandle
+        if (ptr)
+        {
+            memcpy(ptr, data, data_size);
+        }
+
+        return buffer_handle;
+    }
+
+    MaybeInvalid<Pair<std::byte *, BufferDataHandle>> RenderManager::ReserveBufferSpace(
+        BufferTypeId buffer_type_id, uint32_t buffer_size) noexcept
+    {
+        TransientBuffer & buffer = *m_FrameResources[m_FrameIndex].m_Buffers[buffer_type_id.m_BufferTypeIndex];
+        auto [ptr, offset] = buffer.ReserveSpace(buffer_size);
+
+        BufferDataHandle data_handle
         {
             .m_Index = offset / m_BufferTypes[buffer_type_id.m_BufferTypeIndex].m_AlignedSize,
             .m_Type = static_cast<uint8_t>(buffer_type_id.m_BufferTypeIndex),
         };
+
+        return MakePair(ptr, data_handle);
     }
 
     void RenderManager::RegisterRenderGlobals()
@@ -907,6 +939,7 @@ namespace YT
         return nullptr;
     }
 
+
     bool RenderManager::UpdateBufferDescriptorSetInfo() noexcept
     {
         if (m_BufferDescriptorSetId == m_BufferTypes.size())
@@ -952,14 +985,6 @@ namespace YT
                 PushDeletionCallback([this, buffer_set_layout = m_BufferDescriptorSetLayout.release()]() mutable
                 {
                     m_Device->destroyDescriptorSetLayout(buffer_set_layout);
-                });
-            }
-
-            if (m_PipelineLayout.get())
-            {
-                PushDeletionCallback([this, pipeline_layout = m_PipelineLayout.release()]() mutable
-                {
-                    m_Device->destroyPipelineLayout(pipeline_layout);
                 });
             }
 
@@ -1038,10 +1063,6 @@ namespace YT
                     0, nullptr);
             }
 
-            vk::PipelineLayoutCreateInfo layout_create_info;
-            layout_create_info.setSetLayouts(descriptor_set_layouts);
-            m_PipelineLayout = m_Device->createPipelineLayoutUnique(layout_create_info, nullptr);
-
             m_BufferDescriptorSetId = m_BufferTypes.size();
             return true;
         }
@@ -1057,34 +1078,7 @@ namespace YT
         return false;
     }
 
-    MaybeInvalid<vk::UniquePipelineLayout> RenderManager::CreatePipelineLayout() noexcept
-    {
-        try
-        {
-            std::array descriptor_set_layouts =
-            {
-                m_BufferDescriptorSetLayout.get(),
-            };
-
-            vk::PipelineLayoutCreateInfo layout_create_info;
-            layout_create_info.setSetLayouts(descriptor_set_layouts);
-
-            return m_Device->createPipelineLayoutUnique(layout_create_info, nullptr);
-        }
-        catch (const vk::SystemError & e)
-        {
-            FatalPrint("Failed to create pipeline layout: {}", e.what());
-        }
-        catch (...)
-        {
-            FatalPrint("Failed to create pipeline layout: unknown error");
-        }
-
-        return {};
-
-    }
-
-    OptionalPtr<vk::UniquePipeline> RenderManager::PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept
+    OptionalPtr<PSOVariant> RenderManager::PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept
     {
         vk::UniqueShaderModule* vertex_shader_module = FindShaderModule(pso.m_CreateInfo.m_VertexShader);
         vk::UniqueShaderModule* mesh_shader_module = FindShaderModule(pso.m_CreateInfo.m_MeshShader);
@@ -1092,6 +1086,28 @@ namespace YT
 
         try
         {
+            // create the layout
+            std::array descriptor_set_layouts =
+            {
+                m_BufferDescriptorSetLayout.get(),
+            };
+
+            std::array push_constant_ranges =
+            {
+                vk::PushConstantRange(vk::ShaderStageFlagBits::eAll, 0, pso.m_CreateInfo.m_PushConstantsSize),
+            };
+
+            vk::PipelineLayoutCreateInfo layout_create_info;
+
+            if (pso.m_CreateInfo.m_PushConstantsSize > 0)
+            {
+                layout_create_info.setPushConstantRanges(push_constant_ranges);
+            }
+
+            layout_create_info.setSetLayouts(descriptor_set_layouts);
+            vk::UniquePipelineLayout layout = m_Device->createPipelineLayoutUnique(layout_create_info, nullptr);
+
+            // set up shaders
             vk::PipelineShaderStageCreateInfo vertex_shader_stage_create_info;
             if (vertex_shader_module)
             {
@@ -1124,6 +1140,7 @@ namespace YT
                 return nullptr;
             }
 
+            // set up dynamic state
             vk::PipelineDynamicStateCreateInfo dynamic_state_create_info;
 
             std::array dynamic_states =
@@ -1134,15 +1151,18 @@ namespace YT
 
             dynamic_state_create_info.setDynamicStates(dynamic_states);
 
+            // set up vertex inpus
             vk::PipelineVertexInputStateCreateInfo vertex_input_state_create_info;
 
             vk::PipelineInputAssemblyStateCreateInfo input_assembly_state_create_info;
             input_assembly_state_create_info.topology = vk::PrimitiveTopology::eTriangleList;
 
+            // set up viewport
             vk::PipelineViewportStateCreateInfo viewport_state_create_info;
             viewport_state_create_info.viewportCount = 1;
             viewport_state_create_info.scissorCount = 1;
 
+            // set up raster info
             vk::PipelineRasterizationStateCreateInfo rasterization_state_create_info;
             rasterization_state_create_info.depthClampEnable = false;
             rasterization_state_create_info.rasterizerDiscardEnable = false;
@@ -1158,6 +1178,7 @@ namespace YT
             vk::PipelineMultisampleStateCreateInfo multisample_state_create_info;
             multisample_state_create_info.sampleShadingEnable = false;
 
+            // set up blend state
             std::array color_blend_attachment_states =
             {
                 vk::PipelineColorBlendAttachmentState(
@@ -1177,7 +1198,7 @@ namespace YT
             color_blend_state_create_info.logicOp = vk::LogicOp::eCopy;
             color_blend_state_create_info.setAttachments(color_blend_attachment_states);
 
-
+            // set up attachments
             std::array color_attachment_formats =
             {
                 deferred_settings.m_SurfaceFormat
@@ -1186,6 +1207,7 @@ namespace YT
             vk::PipelineRenderingCreateInfoKHR rendering_create_info;
             rendering_create_info.setColorAttachmentFormats(color_attachment_formats);
 
+            // set up graphics pipeline
             std::array stages =
             {
                 vertex_shader_stage_create_info,
@@ -1203,7 +1225,7 @@ namespace YT
             pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
             pipeline_create_info.pDepthStencilState = nullptr;
             pipeline_create_info.pDynamicState = &dynamic_state_create_info;
-            pipeline_create_info.layout = m_PipelineLayout.get();
+            pipeline_create_info.layout = layout.get();
             pipeline_create_info.renderPass = nullptr;
             pipeline_create_info.subpass = 0;
             pipeline_create_info.basePipelineHandle = nullptr;
@@ -1216,8 +1238,13 @@ namespace YT
                 return nullptr;
             }
 
-            auto & result = pso.m_Pipelines.emplace_back(MakePair(deferred_settings, std::move(pipeline_result.value)));
-            return &result.second;
+            auto & result = pso.m_Variants.emplace_back(PSOVariant
+                {
+                    .m_DeferredSettings = deferred_settings,
+                    .m_Layout = std::move(layout),
+                    .m_Pipeline = std::move(pipeline_result.value),
+                });
+            return &result;
         }
         catch (vk::SystemError& err)
         {
@@ -1293,11 +1320,6 @@ namespace YT
             command_buffer->setViewport(0, 1, &viewport);
 
             command_buffer->setScissor(0, 1, &render_area);
-
-            vk::DescriptorSet descriptor_set = m_FrameResources[m_FrameIndex].m_BufferDescriptorSet;
-            command_buffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                m_PipelineLayout.get(), 0, 1,
-                &descriptor_set, 0, nullptr);
             return true;
         }
         catch (vk::SystemError& err)

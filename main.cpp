@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cstdio>
 
+#include <glm/glm.hpp>
+
 import YT;
 
 using namespace YT;
@@ -22,7 +24,7 @@ class TestWidget : public Widget<TestWidget>
 public:
     virtual void OnDraw(YT::Drawer & drawer) override
     {
-        drawer.DrawRaw(g_PSOHandle, 3);
+        drawer.DrawQuad(glm::vec2(0, 0), glm::vec2(100, 100), glm::vec4(1, 1, 1, 1));
     };
 };
 

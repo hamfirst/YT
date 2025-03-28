@@ -13,6 +13,7 @@ module;
 #include <unordered_set>
 #include <print>
 #include <stdexcept>
+#include <span>
 
 export module YT:Types;
 
@@ -62,6 +63,9 @@ namespace YT
 
     export template<typename T>
     using Function = std::function<T>;
+
+    export template <typename T>
+    using Span = std::span<T>;
 
     export using Mutex = std::mutex;
     export using Thread = std::thread;
