@@ -120,6 +120,12 @@ namespace YT
         vk::UniqueDescriptorPool m_BufferDescriptorPool;
         size_t m_BufferDescriptorSetId = 0;
 
+        // Images
+        static constexpr size_t MaxImageDescriptors = 100000;
+        vk::UniqueDescriptorSetLayout m_ImageDescriptorSetLayout;
+        vk::UniqueDescriptorPool m_ImageDescriptorPool;
+        vk::DescriptorSet m_ImageDescriptorSet;
+
         // Frame resources
         struct FrameResource
         {

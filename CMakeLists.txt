@@ -26,12 +26,16 @@ list(INSERT CMAKE_MODULE_PATH 0 ${ECM_MODULE_PATH})
 find_package(WaylandScanner REQUIRED)
 find_package(WaylandProtocols REQUIRED)
 
-add_executable(YTTest
-        main.cpp
+enable_testing()
+
+find_package(GTest CONFIG REQUIRED)
+
+set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
+        Internal/VMA.cpp
 )
 
-target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
+set(YT_MODULE_SOURCES
         YT.ixx
         Drawer.ixx
         Init.ixx
@@ -65,18 +69,7 @@ target_sources(YTTest PUBLIC FILE_SET CXX_MODULES FILES
         Internal/YTImpl.cpp
 )
 
-
-ecm_add_wayland_client_protocol(YTTest
-        PROTOCOL ${WaylandProtocols_DATADIR}/stable/xdg-shell/xdg-shell.xml
-        BASENAME xdg-shell
-)
-
-target_include_directories(YTTest PRIVATE
-        ${CMAKE_CURRENT_BINARY_DIR}
-        ${PLF_HIVE_INCLUDE_DIRS}
-)
-
-target_link_libraries(YTTest PRIVATE
+set(YT_LINK_LIBRARIES
         wayland-client
         vulkan
         GPUOpen::VulkanMemoryAllocator
@@ -85,10 +78,46 @@ target_link_libraries(YTTest PRIVATE
         glslang::glslang-default-resource-limits
         glm::glm
 )
-target_compile_options(YTTest PRIVATE
-        -Wno-c23-extensions
-        -Wno-invalid-offsetof
-        -Wno-nullability-completeness
+
+function(add_yt_executable TARGET_NAME SOURCES)
+
+    add_executable(${TARGET_NAME} ${SOURCES} ${YT_CPP_SOURCES})
+    target_sources(${TARGET_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${YT_MODULE_SOURCES})
+
+    ecm_add_wayland_client_protocol(${TARGET_NAME}
+            PROTOCOL ${WaylandProtocols_DATADIR}/stable/xdg-shell/xdg-shell.xml
+            BASENAME xdg-shell
+    )
+
+    target_include_directories(${TARGET_NAME} PRIVATE
+            ${CMAKE_CURRENT_BINARY_DIR}
+            ${PLF_HIVE_INCLUDE_DIRS}
+    )
+
+    target_link_libraries(${TARGET_NAME} PRIVATE
+            ${YT_LINK_LIBRARIES}
+    )
+
+    target_compile_options(${TARGET_NAME} PRIVATE
+            -Wno-c23-extensions
+            -Wno-invalid-offsetof
+            -Wno-nullability-completeness
+    )
+endfunction()
+
+function(add_yt_test_executable TARGET_NAME SOURCES MODULES)
+    add_yt_executable(${TARGET_NAME} ${SOURCES})
+
+    target_link_libraries(${TARGET_NAME} PRIVATE
+            GTest::gtest
+    )
+
+    target_sources(${TARGET_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${MODULES})
+
+endfunction()
+
+add_yt_executable(YTTest
+        main.cpp
 )
 
 set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Shaders")
@@ -110,3 +139,9 @@ foreach(SHADER_PATH ${SHADERS})
 
     add_dependencies(YTTest ${SHADER_NAME})
 endforeach()
+
+add_yt_test_executable(YTUnitTests
+        Tests/Empty.cpp Tests/BlockTableTest.cpp
+)
+
+add_test(YT YTUnitTests --gtest_break_on_failure)

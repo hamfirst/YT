@@ -24,14 +24,15 @@ namespace YT
 
         void DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color) noexcept;
 
+        void FlushIfNeeded() noexcept;
     private:
 
         template<typename T>
         void Flush(const DrawList<T> & t);
 
-        void FlushIfNeeded() noexcept;
 
     private:
+
         vk::CommandBuffer m_CommandBuffer;
         DrawerData m_DrawerData;
         PSODeferredSettings m_PSODeferredSettings;

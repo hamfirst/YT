@@ -43,7 +43,7 @@ namespace YT
         bool Begin() noexcept
         {
             m_Ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
-            m_BufferSize = 0;
+            m_BufferSize.store(0, std::memory_order_seq_cst);
             return true;
         }
 
@@ -75,7 +75,7 @@ namespace YT
                 return MakePair(nullptr, UINT64_MAX);
             }
 
-            uint64_t start = m_BufferSize.fetch_add(size);
+            uint64_t start = m_BufferSize.fetch_add(size, std::memory_order_acq_rel);
 
             if (start + size > m_AllocationSize)
             {

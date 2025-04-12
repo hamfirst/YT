@@ -11,7 +11,6 @@ module;
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
-#define VMA_IMPLEMENTATION
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
 
 // Loaded extensions
@@ -223,27 +222,33 @@ namespace YT
             Optional<vk::PhysicalDevice> best_physical_device;
             Optional<uint32_t> best_queue_index;
 
-            const std::string display_extension_name = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-            const std::string dynamic_rendering_extension_name = VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
+            std::array required_extensions =
+                {
+                    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+                    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+                };
+
             for(const vk::PhysicalDevice & physical_device : physical_devices)
             {
-                // Check for swap chain support
-                bool has_swap_chain_support = false;
-                bool has_dynamic_rendering_support = false;
+                // Check for extension support
+                std::vector<std::string> extension_names;
                 for(const vk::ExtensionProperties & extension : physical_device.enumerateDeviceExtensionProperties())
                 {
-                    if (extension.extensionName == display_extension_name)
-                    {
-                        has_swap_chain_support = true;
-                    }
+                    extension_names.push_back(extension.extensionName);
+                }
 
-                    if (extension.extensionName == dynamic_rendering_extension_name)
+                bool has_required_extensions = true;
+                for (auto extension_name : required_extensions)
+                {
+                    if (std::ranges::find(extension_names, extension_name) == extension_names.end())
                     {
-                        has_dynamic_rendering_support = true;
+                        has_required_extensions = false;
+                        break;
                     }
                 }
 
-                if (!has_swap_chain_support || !has_dynamic_rendering_support)
+                if (!has_required_extensions)
                 {
                     continue;
                 }
@@ -284,14 +289,17 @@ namespace YT
                 &graphics_queue_priority);
 
             std::vector<const char *> device_layer_names {};
-            std::vector<const char *> device_extension_names {};
 
-            device_extension_names.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-            device_extension_names.emplace_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+            vk::PhysicalDeviceDescriptorIndexingFeatures physical_device_descriptor_indexing_features;
+            physical_device_descriptor_indexing_features.descriptorBindingSampledImageUpdateAfterBind = true;
+            physical_device_descriptor_indexing_features.descriptorBindingPartiallyBound = true;
+            physical_device_descriptor_indexing_features.descriptorBindingVariableDescriptorCount = true;
 
             vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR buffer_device_address_features(true);
+            buffer_device_address_features.pNext = &physical_device_descriptor_indexing_features;
 
-            vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features(true, &buffer_device_address_features);
+            vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features(true);
+            dynamic_rendering_features.pNext = &buffer_device_address_features;
 
             vk::PhysicalDeviceFeatures device_features;
             device_features.shaderInt64 = true;
@@ -300,7 +308,7 @@ namespace YT
                 vk::DeviceCreateFlags(),
                 device_queue_create_info,
                 device_layer_names,
-                device_extension_names,
+                required_extensions,
                 &device_features, &dynamic_rendering_features);
 
             m_Device = m_PhysicalDevice.createDeviceUnique(device_create_info);
@@ -313,6 +321,55 @@ namespace YT
             command_pool_create_info.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
             command_pool_create_info.queueFamilyIndex = best_queue_index.value();
             m_CommandPool = m_Device->createCommandPoolUnique(command_pool_create_info);
+
+            // create the image pool
+            std::array descriptor_pool_sizes =
+            {
+                vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MaxImageDescriptors)
+            };
+
+            vk::DescriptorPoolCreateInfo descriptor_pool_create_info;
+            descriptor_pool_create_info.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind;
+            descriptor_pool_create_info.maxSets = 1;
+            descriptor_pool_create_info.setPoolSizes(descriptor_pool_sizes);
+            m_ImageDescriptorPool = m_Device->createDescriptorPoolUnique(descriptor_pool_create_info);
+
+            // create the image descriptor layout
+            std::array image_set_bindings =
+                {
+                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eCombinedImageSampler,
+                        MaxImageDescriptors, vk::ShaderStageFlagBits::eFragment)
+                };
+
+            std::array image_set_binding_flags =
+                {
+                    vk::DescriptorBindingFlagBits::ePartiallyBound |
+                    vk::DescriptorBindingFlagBits::eVariableDescriptorCount |
+                    vk::DescriptorBindingFlagBits::eUpdateAfterBind
+                };
+
+            vk::DescriptorSetLayoutBindingFlagsCreateInfo descriptor_set_layout_binding_flags_create_info;
+            descriptor_set_layout_binding_flags_create_info.setBindingFlags(image_set_binding_flags);
+
+            vk::DescriptorSetLayoutCreateInfo image_set_layout_create_info;
+            image_set_layout_create_info.setBindings(image_set_bindings);
+            image_set_layout_create_info.flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool;
+            image_set_layout_create_info.pNext = &descriptor_set_layout_binding_flags_create_info;
+            m_ImageDescriptorSetLayout = m_Device->createDescriptorSetLayoutUnique(image_set_layout_create_info);
+
+            std::array descriptor_set_layouts =
+            {
+                m_ImageDescriptorSetLayout.get(),
+            };
+
+            vk::DescriptorSetAllocateInfo descriptor_set_allocate_info;
+            descriptor_set_allocate_info.descriptorPool = m_ImageDescriptorPool.get();
+            descriptor_set_allocate_info.setSetLayouts(descriptor_set_layouts);
+
+            auto descriptor_sets = m_Device->allocateDescriptorSets(
+                descriptor_set_allocate_info);
+
+            m_ImageDescriptorSet = descriptor_sets.front();
 
             // create the vma allocator
             vma::AllocatorCreateInfo allocator_create_info;
@@ -359,6 +416,8 @@ namespace YT
     {
         m_Device->waitIdle();
 
+        m_PSOTable.Clear();
+
         for (auto & frame_resource : m_FrameResources)
         {
             for (const auto & func : frame_resource.m_DeletionCallbacks)
@@ -366,6 +425,7 @@ namespace YT
                 func();
             }
         }
+
     }
 
     bool RenderManager::CreateWindowResources(const WindowInitInfo & init_info, WindowResource & resource) noexcept
@@ -540,6 +600,8 @@ namespace YT
 
                     Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), drawer_data, pso_deferred_settings);
                     resource.m_Widget->OnDraw(drawer);
+
+                    drawer.FlushIfNeeded();
 
                     if (!CompleteCommandBuffer(resource))
                     {
@@ -1238,12 +1300,20 @@ namespace YT
                 return nullptr;
             }
 
-            auto & result = pso.m_Variants.emplace_back(PSOVariant
-                {
-                    .m_DeferredSettings = deferred_settings,
-                    .m_Layout = std::move(layout),
-                    .m_Pipeline = std::move(pipeline_result.value),
-                });
+            PSOVariant variant;
+
+            variant.m_DeferredSettings = deferred_settings;
+            variant.m_Layout = std::move(layout);
+            variant.m_Pipeline = std::move(pipeline_result.value);
+
+            auto & result = pso.m_Variants.emplace_back(std::move(variant));
+
+            // auto & result = pso.m_Variants.emplace_back(PSOVariant
+            //     {
+            //         .m_DeferredSettings = deferred_settings,
+            //         .m_Layout = std::move(layout),
+            //         .m_Pipeline = std::move(pipeline_result.value),
+            //     });
             return &result;
         }
         catch (vk::SystemError& err)

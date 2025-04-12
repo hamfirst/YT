@@ -42,8 +42,14 @@ namespace YT
         };
 
         m_DrawCombiner.PushData(quad_data);
+    }
 
-        FlushIfNeeded();
+    void Drawer::FlushIfNeeded() noexcept
+    {
+        if (m_DrawCombiner.NeedsFlush())
+        {
+            m_DrawCombiner.Flush([this](auto & draw_data) { Flush(draw_data); });
+        }
     }
 
     template <typename T>
@@ -84,11 +90,4 @@ namespace YT
         }
     }
 
-    void Drawer::FlushIfNeeded() noexcept
-    {
-        if (m_DrawCombiner.NeedsFlush())
-        {
-            m_DrawCombiner.Flush([this](auto & draw_data) { Flush(draw_data); });
-        }
-    }
 }

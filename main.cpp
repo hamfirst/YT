@@ -24,7 +24,9 @@ class TestWidget : public Widget<TestWidget>
 public:
     virtual void OnDraw(YT::Drawer & drawer) override
     {
-        drawer.DrawQuad(glm::vec2(0, 0), glm::vec2(100, 100), glm::vec4(1, 1, 1, 1));
+        drawer.DrawQuad(glm::vec2(0, 0), glm::vec2(100, 100), glm::vec4(1, 0, 0, 1));
+        drawer.DrawQuad(glm::vec2(50, 50), glm::vec2(100, 100), glm::vec4(1, 1, 1, 1));
+        drawer.DrawQuad(glm::vec2(100, 100), glm::vec2(100, 100), glm::vec4(0, 0, 1, 1));
     };
 };
 

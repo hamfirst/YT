@@ -48,6 +48,19 @@ namespace YT
         PSODeferredSettings m_DeferredSettings;
         vk::UniquePipelineLayout m_Layout;
         vk::UniquePipeline m_Pipeline;
+
+        PSOVariant() = default;
+        PSOVariant(const PSOVariant &) = delete;
+        PSOVariant(PSOVariant &&) = default;
+
+        PSOVariant &operator=(const PSOVariant &) = delete;
+        PSOVariant &operator=(PSOVariant &&) = default;
+
+        ~PSOVariant()
+        {
+            m_Pipeline.reset();
+            m_Layout.reset();
+        }
     };
 
     export struct PSO

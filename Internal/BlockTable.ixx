@@ -1,4 +1,3 @@
-
 module;
 
 #include <atomic>
@@ -6,6 +5,7 @@ module;
 #include <random>
 #include <mutex>
 #include <optional>
+#include <array>
 
 
 export module YT:BlockTable;
@@ -14,6 +14,18 @@ import :Types;
 
 namespace YT
 {
+    /**
+     * @brief A thread-safe reference counting mechanism that combines generation tracking with reference counting.
+     * 
+     * This class provides atomic operations for managing both a generation number and a reference count
+     * in a single 64-bit atomic value. The generation number is used to detect stale handles, while
+     * the reference count tracks the number of active references to an object.
+     * 
+     * Thread Safety:
+     * - All operations are thread-safe and lock-free
+     * - Memory ordering is carefully chosen to ensure proper synchronization
+     * - Operations use acquire/release semantics where appropriate
+     */
     export class BlockTableGenerationRefCount
     {
     public:
@@ -28,24 +40,24 @@ namespace YT
 
         void SetGenerationAndRefCount(uint32_t generation, uint32_t ref_count = 0) noexcept
         {
-            m_Data = std::atomic<uint64_t>(ref_count) << 32 | generation;
+            m_Data.store(static_cast<uint64_t>(ref_count) << 32 | static_cast<uint64_t>(generation), std::memory_order_release);
         }
 
         [[nodiscard]] bool CheckGeneration(uint32_t generation) const noexcept
         {
-            return (m_Data.load() & UINT32_MAX) == generation;
+            return (m_Data.load(std::memory_order_acquire) & UINT32_MAX) == generation;
         }
 
         [[nodiscard]] uint32_t GetGeneration() const noexcept
         {
-            return m_Data.load() & UINT32_MAX;
+            return m_Data.load(std::memory_order_acquire) & UINT32_MAX;
         }
 
         bool IncRef(uint32_t generation) noexcept
         {
             while (true)
             {
-                uint64_t data = m_Data.load();
+                uint64_t data = m_Data.load(std::memory_order_acquire);
                 uint64_t cur_gen = (data & UINT32_MAX);
                 uint64_t cur_ref = (data >> 32) & UINT32_MAX;
 
@@ -56,7 +68,7 @@ namespace YT
 
                 uint64_t new_data = (cur_ref + 1) << 32 | cur_gen;
 
-                if (m_Data.compare_exchange_strong(data, new_data))
+                if (m_Data.compare_exchange_weak(data, new_data))
                 {
                     return true;
                 }
@@ -65,14 +77,14 @@ namespace YT
 
         void IncRefNoValidation() noexcept
         {
-            m_Data.fetch_add(UINT32_MAX + 1);
+            m_Data.fetch_add(UINT32_MAX + 1, std::memory_order_release);
         }
 
         bool DecRef(uint32_t generation, uint32_t & out_ref_count) noexcept
         {
             while (true)
             {
-                uint64_t data = m_Data.load();
+                uint64_t data = m_Data.load(std::memory_order_acquire);
                 uint64_t cur_gen = (data & UINT32_MAX);
                 uint64_t cur_ref = (data >> 32) & UINT32_MAX;
 
@@ -89,7 +101,7 @@ namespace YT
                 cur_ref--;
                 uint64_t new_data = (cur_ref << 32) | cur_gen;
 
-                if (m_Data.compare_exchange_strong(data, new_data))
+                if (m_Data.compare_exchange_weak(data, new_data))
                 {
                     out_ref_count = cur_ref;
                     return true;
@@ -99,7 +111,7 @@ namespace YT
 
         bool DecRefNoValidation() noexcept
         {
-            uint64_t result = m_Data.fetch_sub(UINT32_MAX + 1);
+            uint64_t result = m_Data.fetch_sub(UINT32_MAX + 1, std::memory_order_release);
 
             uint64_t cur_ref = (result >> 32) & UINT32_MAX;
             return cur_ref != 0;
@@ -109,6 +121,16 @@ namespace YT
         std::atomic_uint64_t m_Data = 0;
     };
 
+    /**
+     * @brief A handle to an element in a BlockTable.
+     * 
+     * This struct represents a reference to an element stored in a BlockTable. It contains:
+     * - m_BlockIndex: The index of the block containing the element
+     * - m_ElemIndex: The index of the element within its block
+     * - m_Generation: A generation number used to detect stale handles
+     * 
+     * The handle is designed to be passed by value and is 64 bits in size.
+     */
     export struct BlockTableHandle
     {
         explicit operator bool () const noexcept { return *this != BlockTableHandle{}; }
@@ -133,9 +155,65 @@ namespace YT
         return HandleType{ handle };
     }
 
+    /**
+     * @brief A thread-safe, block-based container for storing objects with handle-based access.
+     * 
+     * This class provides a high-performance, thread-safe container for storing objects of type T.
+     * It uses a block-based allocation strategy to minimize memory fragmentation and provide
+     * efficient allocation/deallocation.
+     * 
+     * Features:
+     * - Thread-safe operations
+     * - Handle-based access to elements
+     * - Generation tracking to detect stale handles
+     * - Reference counting for elements
+     * - Efficient block-based allocation
+     * 
+     * Thread Safety:
+     * - All public methods are thread-safe
+     * - Block allocation is protected by a mutex
+     * - Element access uses atomic operations with appropriate memory ordering
+     * 
+     * Memory Ordering:
+     * - Block allocation uses mutex for synchronization
+     * - Element access uses acquire/release semantics
+     * - Reference counting uses acquire/release semantics
+     * 
+     * @tparam T The type of object to store
+     * @tparam BlockSize The number of elements per block (must be a multiple of 64)
+     * @tparam BlockCount The maximum number of blocks
+     */
     export template <typename T, int BlockSize = 65536, int BlockCount = 2048>
     class BlockTable final
     {
+    private:
+
+        static_assert(BlockSize % 64 == 0, "BlockSize must be a multiple of 64");
+        static_assert(BlockSize > 0, "BlockSize must be greater than 0");
+        static_assert(BlockSize <= 65536, "BlockSize must be less than 65536");
+        static_assert(BlockCount > 0, "BlockCount must be greater than 0");
+        static_assert(BlockCount <= 65536, "BlockCount must be less than 65536");
+
+        /**
+         * @brief Internal structure for storing an element and its metadata.
+         */
+        struct ElementStorage
+        {
+            BlockTableGenerationRefCount m_GenerationRefCount;
+            std::byte m_Buffer[sizeof(T)];
+        };
+
+        /**
+         * @brief Internal structure representing a block of elements.
+         */
+        struct Block
+        {
+            std::atomic_int m_LowestFreeIndexHeuristic = 0;
+            std::atomic_int m_FreeCount = BlockSize;
+            std::atomic_uint64_t m_BlockAlloc[(BlockSize + 63) / 64];
+            ElementStorage m_BlockData[BlockSize];
+        };
+
     public:
 
         BlockTable() = default;
@@ -147,84 +225,180 @@ namespace YT
 
         ~BlockTable()
         {
-            for (int block_index = 0; block_index < BlockCount; ++block_index)
+            Clear();
+        }
+
+        /**
+         * @brief Clears all elements from the table.
+         * 
+         * This method destroys all elements and frees all blocks. It is not thread-safe
+         * with respect to other operations on the table. The caller must ensure that no
+         * other threads are accessing the table while this method is executing.
+         * 
+         * The method is noexcept. If an element's destructor throws, the exception is caught
+         * and the cleanup continues for remaining elements.
+         * 
+         * @note This method acquires a mutex to prevent concurrent access during cleanup.
+         *       However, it does not prevent other threads from accessing the table
+         *       before or after the cleanup operation.
+         */
+        void Clear() noexcept
+        {
+            std::lock_guard guard(m_BlockAllocMutex);
+            for (UniquePtr<Block> & block : m_Blocks)
             {
-                if (m_Blocks[block_index])
+                if (block)
                 {
                     int element_index = 0;
                     for (int word_index = 0; word_index < BlockSize / 64; ++word_index, ++element_index)
                     {
-                        uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load();
+                        uint64_t word = block->m_BlockAlloc[word_index].load(std::memory_order_acquire);
                         if (word == 0)
                         {
+                            element_index += 64;
                             continue;
                         }
 
                         for (int bit_index = 0; bit_index < 64; ++bit_index, ++element_index)
                         {
-                            if (word & (1 << bit_index))
+                            if (word & (1ULL << bit_index))
                             {
-                                ElementStorage & element = m_Blocks[block_index]->m_BlockData[element_index];
+                                ElementStorage & element = block->m_BlockData[element_index];
 
-                                T * t = reinterpret_cast<T *>(&element.m_Buffer);
-                                t->~T();
+                                try
+                                {
+                                    T * t = reinterpret_cast<T *>(&element.m_Buffer);
+                                    t->~T();
+                                }
+                                catch (...)
+                                {
+                                    
+                                }
                             }
                         }
                     }
-
-                    delete m_Blocks[block_index];
                 }
+
+                block.reset();
             }
         }
 
+        /**
+         * @brief Allocates a new element and returns a handle to it.
+         * 
+         * This method is thread-safe and noexcept. It will:
+         * 1. Find or create a block with free space
+         * 2. Allocate a slot in the block
+         * 3. Construct the element
+         * 4. Return a handle to the element
+         * 
+         * @param args Arguments to forward to T's constructor
+         * @return A handle to the new element, or InvalidBlockTableHandle if allocation failed
+         */
         template <typename... Args>
-        BlockTableHandle AllocateHandle(Args &&... args) noexcept
+        [[nodiscard]] BlockTableHandle AllocateHandle(Args &&... args) noexcept
         {
             // Try to find a block with free space
             for (int block_index = 0; block_index < BlockCount; ++block_index)
             {
+                UniquePtr<Block> & block = m_Blocks[block_index];
                 // Make a new block
-                if (!m_Blocks[block_index])
+                if (!block)
                 {
                     std::lock_guard guard(m_BlockAllocMutex);
-                    if (!m_Blocks[block_index])
+                    // Check the block again in case another thread got in here
+                    if (!block)
                     {
-                        m_Blocks[block_index] = new Block;
+                        block = MakeUnique<Block>();
                     }
                 }
 
-                if (Optional<int> slot_index = ReserveSlotInBlock(block_index))
+                if (Optional<int> slot_index = ReserveSlotInBlock(block))
                 {
-                    return AssignSlot(block_index, slot_index.value(), std::forward<Args>(args)...);
+                    return AssignSlot(block, block_index, slot_index.value(), std::forward<Args>(args)...);
                 }
             }
 
             return InvalidBlockTableHandle;
         }
 
+        /**
+         * @brief Releases an element referenced by a handle.
+         * 
+         * This method is thread-safe and noexcept. It will:
+         * 1. Validate the handle's generation
+         * 2. Destroy the element if the generation matches
+         * 3. Release the slot for reuse
+         * 
+         * @param handle The handle to release
+         * @return true if the element was successfully released, false otherwise
+         */
         bool ReleaseHandle(BlockTableHandle handle) noexcept
         {
-            ElementStorage & element = m_Blocks[handle.m_BlockIndex]->m_BlockData[handle.m_ElemIndex];
+            if (handle.m_Generation == 0)
+            {
+                return false;
+            }
+
+            if (handle.m_BlockIndex >= BlockCount)
+            {
+                return false;
+            }
+
+            if (!m_Blocks[handle.m_BlockIndex])
+            {
+                return false;
+            }
+
+            UniquePtr<Block> & block = m_Blocks[handle.m_BlockIndex];
+            ElementStorage & element = block->m_BlockData[handle.m_ElemIndex];
 
             if (element.m_GenerationRefCount.CheckGeneration(handle.m_Generation))
             {
                 element.m_GenerationRefCount.SetGenerationAndRefCount(0);
 
-                T * t = reinterpret_cast<T *>(&element.m_Buffer);
-                t->~T();
+                try
+                {
+                    T * t = reinterpret_cast<T *>(&element.m_Buffer);
+                    t->~T();
+                }
+                catch (...)
+                {
+                    
+                }
 
-                ReleaseSlot(handle.m_BlockIndex, handle.m_ElemIndex);
-
-                m_Blocks[handle.m_BlockIndex]->m_LowestFreeIndexHeuristic = handle.m_ElemIndex;
+                ReleaseSlot(block, handle.m_ElemIndex);
+                block->m_LowestFreeIndexHeuristic = handle.m_ElemIndex;
+                block->m_FreeCount.fetch_add(1, std::memory_order_seq_cst);
                 return true;
             }
 
             return false;
         }
 
+        /**
+         * @brief Resolves a handle to a pointer to the element.
+         * 
+         * This method is thread-safe and noexcept. It will:
+         * 1. Validate the handle's generation
+         * 2. Return a pointer to the element if the generation matches
+         * 
+         * @param handle The handle to resolve
+         * @return A pointer to the element, or nullptr if the handle is invalid
+         */
         OptionalPtr<T> ResolveHandle(BlockTableHandle handle) noexcept
         {
             if (handle.m_Generation == 0)
+            {
+                return nullptr;
+            }
+
+            if (handle.m_BlockIndex >= BlockCount)
+            {
+                return nullptr;
+            }
+
+            if (!m_Blocks[handle.m_BlockIndex])
             {
                 return nullptr;
             }
@@ -238,6 +412,16 @@ namespace YT
             return nullptr;
         }
 
+        /**
+         * @brief Gets a pointer to the generation reference count for a handle.
+         * 
+         * This method is thread-safe and noexcept. It will:
+         * 1. Validate the handle's generation
+         * 2. Return a pointer to the generation reference count if the generation matches
+         * 
+         * @param handle The handle to get the generation pointer for
+         * @return A pointer to the generation reference count, or nullptr if the handle is invalid
+         */
         OptionalPtr<BlockTableGenerationRefCount> GetGenerationPointer(BlockTableHandle handle) noexcept
         {
             if (handle.m_Generation == 0)
@@ -254,8 +438,21 @@ namespace YT
             return nullptr;
         }
 
+        /**
+         * @brief Visits all valid handles in the table.
+         * 
+         * This method is thread-safe and noexcept. It will call the visitor
+         * function for each valid handle in the table. The visitor should not
+         * modify the table's structure.
+         * 
+         * @note The visitor function must not throw exceptions. If the visitor
+         *       throws, the behavior is undefined.
+         * 
+         * @tparam Visitor A callable type that takes a BlockTableHandle
+         * @param visitor The visitor function to call for each handle
+         */
         template <typename Visitor>
-        void VisitAllHandles(Visitor && visitor)
+        void VisitAllHandles(Visitor && visitor) noexcept
         {
             for (int block_index = 0; block_index < BlockCount; ++block_index)
             {
@@ -264,7 +461,7 @@ namespace YT
                     int element_index = 0;
                     for (int word_index = 0; word_index < BlockSize / 64; ++word_index, ++element_index)
                     {
-                        uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load();
+                        uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load(std::memory_order_acquire);
                         if (word == 0)
                         {
                             continue;
@@ -272,15 +469,15 @@ namespace YT
 
                         for (int bit_index = 0; bit_index < 64; ++bit_index, ++element_index)
                         {
-                            if (word & (1 << bit_index))
+                            if (word & (1ULL << bit_index))
                             {
                                 ElementStorage & element = m_Blocks[block_index]->m_BlockData[element_index];
-
+            
                                 visitor(BlockTableHandle
                                 {
-                                    .m_BlockIndex = block_index,
-                                    .m_ElemIndex = element_index,
-                                    .m_Generation = element.m_Generation,
+                                    .m_BlockIndex = static_cast<uint16_t>(block_index),
+                                    .m_ElemIndex = static_cast<uint16_t>(element_index),
+                                    .m_Generation = static_cast<uint32_t>(element.m_GenerationRefCount.GetGeneration()),
                                 });
                             }
                         }
@@ -290,39 +487,39 @@ namespace YT
         }
     private:
 
-        bool AllocateSlot(int block_index, int element_index) noexcept
+        bool AllocateSlot(UniquePtr<Block> & block, int element_index) noexcept
         {
-            std::atomic_uint64_t & alloc_bits = m_Blocks[block_index]->m_BlockAlloc[element_index / 64];
+            std::atomic_uint64_t & alloc_bits = block->m_BlockAlloc[element_index / 64];
             int bit_index = element_index % 64;
 
             while (true)
             {
-                uint64_t current_alloc_bits = alloc_bits.load();
+                uint64_t current_alloc_bits = alloc_bits.load(std::memory_order_seq_cst);
 
-                if (current_alloc_bits & (1 << bit_index))
+                if (current_alloc_bits & (1ULL << bit_index))
                 {
                     return false;
                 }
 
-                uint64_t new_alloc_bits = current_alloc_bits | (1 << bit_index);
-                if (alloc_bits.compare_exchange_strong(current_alloc_bits, new_alloc_bits))
+                uint64_t new_alloc_bits = current_alloc_bits | (1ULL << bit_index);
+                if (alloc_bits.compare_exchange_weak(current_alloc_bits, new_alloc_bits))
                 {
                     return true;
                 }
             }
         }
 
-        void ReleaseSlot(int block_index, int element_index) noexcept
+        void ReleaseSlot(UniquePtr<Block> & block, int element_index) noexcept
         {
-            std::atomic_uint64_t & alloc_bits = m_Blocks[block_index]->m_BlockAlloc[element_index / 64];
+            std::atomic_uint64_t & alloc_bits = block->m_BlockAlloc[element_index / 64];
             int bit_index = element_index % 64;
 
             while (true)
             {
-                uint64_t current_alloc_bits = alloc_bits.load();
-                uint64_t new_alloc_bits = current_alloc_bits & ~(1 << bit_index);
+                uint64_t current_alloc_bits = alloc_bits.load(std::memory_order_seq_cst);
+                uint64_t new_alloc_bits = current_alloc_bits & ~(1ULL << bit_index);
 
-                if (alloc_bits.compare_exchange_strong(current_alloc_bits, new_alloc_bits))
+                if (alloc_bits.compare_exchange_weak(current_alloc_bits, new_alloc_bits))
                 {
                     return;
                 }
@@ -330,11 +527,11 @@ namespace YT
         }
 
         template <typename... Args>
-        BlockTableHandle AssignSlot(int block_index, int element_index, Args &&... args) noexcept
+        BlockTableHandle AssignSlot(UniquePtr<Block> & block, int block_index, int element_index, Args &&... args) noexcept
         {
-            uint32_t generation = m_NextGeneration.fetch_add(1);
+            uint32_t generation = m_NextGeneration.fetch_add(1, std::memory_order_relaxed);
 
-            ElementStorage & storage = m_Blocks[block_index]->m_BlockData[element_index];
+            ElementStorage & storage = block->m_BlockData[element_index];
 
             storage.m_GenerationRefCount.SetGenerationAndRefCount(generation, 0);
 
@@ -349,18 +546,18 @@ namespace YT
             };
         }
 
-        Optional<int> FindSlotInBlock(int block_index) noexcept
+        Optional<int> FindSlotInBlock(UniquePtr<Block> & block) noexcept
         {
             auto CheckWord = [&](int word) -> Optional<int>
             {
-                uint64_t alloc_bits = m_Blocks[block_index]->m_BlockAlloc[word];
+                uint64_t alloc_bits = block->m_BlockAlloc[word];
 
                 if (alloc_bits != UINT64_MAX)
                 {
                     int bit_index = std::countr_one(alloc_bits);
 
                     int element_index = bit_index + word * 64;
-                    if (AllocateSlot(block_index, element_index))
+                    if (AllocateSlot(block, element_index))
                     {
                         return element_index;
                     }
@@ -369,7 +566,7 @@ namespace YT
                 return {};
             };
 
-            int search_start = m_Blocks[block_index]->m_LowestFreeIndexHeuristic.load();
+            int search_start = block->m_LowestFreeIndexHeuristic.load(std::memory_order_relaxed);
             int word_start = search_start / 64;
 
             for (int word = word_start; word < BlockSize / 64; ++word)
@@ -391,23 +588,23 @@ namespace YT
             return {};
         }
 
-        Optional<int> ReserveSlotInBlock(int block_index) noexcept
+        Optional<int> ReserveSlotInBlock(UniquePtr<Block> & block) noexcept
         {
-            if (m_Blocks[block_index]->m_FreeCount.fetch_sub(1) > 0)
+            if (block->m_FreeCount.fetch_sub(1, std::memory_order_acquire) > 0)
             {
                 // Search for a free element
-                if (Optional<int> element_index = FindSlotInBlock(block_index))
+                if (Optional<int> element_index = FindSlotInBlock(block))
                 {
-                    m_Blocks[block_index]->m_LowestFreeIndexHeuristic = element_index.value() + 1;
+                    block->m_LowestFreeIndexHeuristic = element_index.value() + 1;
                     return element_index;
                 }
 
                 // Somehow we had a free slot according to the free count, but it got snatched up?
-                m_Blocks[block_index]->m_FreeCount.fetch_add(1);
+                block->m_FreeCount.fetch_add(1, std::memory_order_release);
             }
             else
             {
-                m_Blocks[block_index]->m_FreeCount.fetch_add(1);
+                block->m_FreeCount.fetch_add(1, std::memory_order_relaxed);
             }
 
             return {};
@@ -416,22 +613,8 @@ namespace YT
 
     private:
 
-        struct ElementStorage
-        {
-            BlockTableGenerationRefCount m_GenerationRefCount;
-            alignas(T) std::byte m_Buffer[sizeof(T)];
-        };
-
-        struct Block
-        {
-            std::atomic_int m_LowestFreeIndexHeuristic = 0;
-            std::atomic_int m_FreeCount = BlockSize;
-            std::atomic_uint64_t m_BlockAlloc[(BlockSize + 63) / 64];
-            ElementStorage m_BlockData[BlockSize];
-        };
-
         std::mutex m_BlockAllocMutex;
-        Block* m_Blocks[BlockCount] = { };
+        std::array<UniquePtr<Block>, BlockCount> m_Blocks = { };
         std::atomic_uint32_t m_NextGeneration = 1;
 
     };
