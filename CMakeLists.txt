@@ -33,6 +33,7 @@ find_package(GTest CONFIG REQUIRED)
 set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
         Internal/VMA.cpp
+        Internal/JobManagerImpl.cpp
 )
 
 set(YT_MODULE_SOURCES
@@ -47,6 +48,7 @@ set(YT_MODULE_SOURCES
         RenderTypes.ixx
         RenderReflect.ixx
 
+        Internal/JobManager.ixx
         Internal/RenderManager.ixx
         Internal/WindowManager.ixx
         Internal/ThreadManager.ixx
@@ -113,6 +115,7 @@ function(add_yt_test_executable TARGET_NAME SOURCES MODULES)
     )
 
     target_sources(${TARGET_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${MODULES})
+    add_test(${TARGET_NAME}Test ${TARGET_NAME} --gtest_break_on_failure)
 
 endfunction()
 
@@ -140,8 +143,10 @@ foreach(SHADER_PATH ${SHADERS})
     add_dependencies(YTTest ${SHADER_NAME})
 endforeach()
 
-add_yt_test_executable(YTUnitTests
-        Tests/Empty.cpp Tests/BlockTableTest.cpp
+add_yt_test_executable(YTBlockTableUnitTests
+        Tests/Empty.cpp Tests/BlockTableTests.cpp
 )
 
-add_test(YT YTUnitTests --gtest_break_on_failure)
+add_yt_test_executable(YTJobManagerUnitTests
+        Tests/Empty.cpp Tests/JobManagerTests.cpp
+)

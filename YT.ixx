@@ -15,6 +15,7 @@ export import :Drawer;
 export import :RenderTypes;
 export import :RenderReflect;
 export import :WindowTypes;
+export import :JobManager;
 
 namespace YT
 {

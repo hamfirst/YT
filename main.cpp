@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <cstdio>
+#include <coroutine>
+#include <atomic>
 
 #include <glm/glm.hpp>
 
@@ -30,8 +32,45 @@ public:
     };
 };
 
+JobCoro<int> test_coro()
+{
+    co_return 42;
+}
+
+std::atomic_int counter;
+
+JobCoro<void> test_print()
+{
+    VerbosePrint("{}, {}, {}", g_JobManager.GetThreadId(), counter.fetch_add(1), "test");
+    co_return;
+}
+
+JobCoro<void> test_root_coro()
+{
+    int n = co_await test_coro();
+    co_await test_print();
+
+    JobList<void> jobs;
+    for (int i = 0; i < 50; i++)
+    {
+        jobs.PushJob(test_print());
+    }
+
+    jobs.WaitForCompletion();
+
+    FatalPrint("{}", n);
+}
+
 int main()
 {
+    g_JobManager.PrepareToRunJobs();
+
+    JobList<void> jobs;
+    jobs.PushJob(test_root_coro());
+
+    jobs.WaitForCompletion();
+    g_JobManager.StopRunningJobs();
+
     ApplicationInitInfo init_info
     {
         .m_ApplicationName = "YTTest"
