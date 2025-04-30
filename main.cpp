@@ -41,7 +41,7 @@ std::atomic_int counter;
 
 JobCoro<void> test_print()
 {
-    VerbosePrint("{}, {}, {}", g_JobManager.GetThreadId(), counter.fetch_add(1), "test");
+    VerbosePrint("{}, {}, {}", JobManager::GetThreadId(), counter.fetch_add(1), "test");
     co_return;
 }
 
@@ -63,13 +63,13 @@ JobCoro<void> test_root_coro()
 
 int main()
 {
-    g_JobManager.PrepareToRunJobs();
+    g_JobManager->PrepareToRunJobs();
 
     JobList<void> jobs;
     jobs.PushJob(test_root_coro());
 
     jobs.WaitForCompletion();
-    g_JobManager.StopRunningJobs();
+    g_JobManager->StopRunningJobs();
 
     ApplicationInitInfo init_info
     {

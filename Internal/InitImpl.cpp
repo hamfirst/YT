@@ -3,6 +3,7 @@ module;
 module YT:InitImpl;
 
 import :Types;
+import :JobManager;
 import :WindowManager;
 import :RenderManager;
 import :QuadRender;
@@ -11,6 +12,11 @@ namespace YT
 {
     bool Init(const ApplicationInitInfo& init_info) noexcept
     {
+        if (!JobManager::CreateJobManager())
+        {
+            return false;
+        }
+
         if (!WindowManager::CreateWindowManager(init_info))
         {
             return false;

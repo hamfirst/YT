@@ -19,13 +19,14 @@ class JobManagerTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        g_JobManager.PrepareToRunJobs();
+        JobManager::CreateJobManager();
+        g_JobManager->PrepareToRunJobs();
     }
 
     void TearDown() override
     {
         // Ensure all jobs are completed
-        g_JobManager.StopRunningJobs();
+        g_JobManager->StopRunningJobs();
     }
 };
 
@@ -45,7 +46,7 @@ JobCoro<int> ReturnValue(int value)
 // Test coroutine that runs on main thread
 JobCoroMainThread<void> MainThreadJob(std::atomic<bool>& executed)
 {
-    EXPECT_EQ(g_JobManager.GetThreadId(), 0);  // Should run on main thread
+    EXPECT_EQ(g_JobManager->GetThreadId(), 0);  // Should run on main thread
     executed.store(true, std::memory_order_release);
     co_return;
 }
@@ -130,20 +131,21 @@ TEST_F(JobManagerTest, JobThroughput)
     const int num_jobs = 100000;
     std::atomic<int> counter{0};
     JobList<void> jobs;
-    
+    jobs.Reserve(num_jobs);
+
     auto start_time = std::chrono::high_resolution_clock::now();
-    
+
     // Create and run many jobs
     for (int i = 0; i < num_jobs; ++i)
     {
         jobs.PushJob(IncrementCounter(counter));
     }
-    
+
     jobs.WaitForCompletion();
-    
+
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    
+
     EXPECT_EQ(counter.load(), num_jobs);
     std::cout << "Processed " << num_jobs << " jobs in " << duration.count() << "ms" << std::endl;
 }

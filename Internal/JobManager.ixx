@@ -9,15 +9,25 @@ module;
 #include <thread>
 #include <cassert>
 
-extern thread_local int g_ThreadID;
-extern thread_local int g_NextJobID;
-
 export module YT:JobManager;
 
 import :Types;
+import :FixedBlockAllocator;
 
 namespace YT
 {
+    /// Number of worker threads (including main thread)
+    static constexpr int NumThreads = 1;
+
+    struct JobCompletionTrackingElement
+    {
+        std::size_t m_LocalCount = 0;
+        std::atomic_size_t m_RemoteCount = 0;
+        std::byte m_Pad[std::hardware_destructive_interference_size - sizeof(m_LocalCount) - sizeof(m_RemoteCount)] = {};
+    };
+
+    using JobCompletionTrackingBlock = std::array<JobCompletionTrackingElement, NumThreads>;
+
     /**
      * @brief Base data structure for job promises.
      * 
@@ -27,16 +37,20 @@ namespace YT
     export struct JobPromiseBaseData
     {
         std::coroutine_handle<> m_ResumeHandle = std::coroutine_handle<>();  ///< Handle to resume after this job completes
-        std::atomic_size_t* m_IncrementCounter = nullptr;                    ///< Counter to increment when job completes
-        bool m_IsMainThread = false;                                        ///< Whether this job must run on the main thread
+        JobCompletionTrackingBlock* m_IncrementCounters = nullptr;          ///< Counters to increment when job completes
+        int m_OwningThread = 0;                                             ///< Thread ID of the thread that owns this job
+        bool m_IsMainThread : 1 = false;                                    ///< Whether this job must run on the main thread
+        bool m_ReturnVoid : 1 = false;                                      ///< Whether this job returns void
     };
 
     // Thread-safe job system using C++20 coroutines for task-based parallelism
     export class JobManager final
     {
     public:
-        /// Number of worker threads (including main thread)
-        static constexpr int NumThreads = 4;
+
+        static constexpr int NumThreads = YT::NumThreads;  ///< Number of worker threads (including main thread)
+
+        static bool CreateJobManager() noexcept;
 
         /**
          * @brief Constructs a JobManager and starts worker threads.
@@ -44,16 +58,7 @@ namespace YT
          * Initializes thread-local state and spawns NumThreads-1 worker threads.
          * The main thread (thread 0) is used for root job execution and coordination.
          */
-        JobManager()
-            : m_RunningSemaphore{0}
-        {
-            g_ThreadID = 0;
-            g_NextJobID = 1;
-            for (int i = 1; i < NumThreads; ++i)
-            {
-                m_Threads.emplace_back([this, i]{ JobMain(i); });
-            }
-        }
+        JobManager();
 
         /**
          * @brief Destroys the JobManager and joins all worker threads.
@@ -61,15 +66,7 @@ namespace YT
          * Signals all worker threads to stop and waits for them to complete.
          * Any pending jobs are abandoned.
          */
-        ~JobManager() noexcept
-        {
-            m_Quit.store(true, std::memory_order_relaxed);
-            m_RunningSemaphore.release(NumThreads - 1);
-            for (std::thread & thread : m_Threads)
-            {
-                thread.join();
-            }
-        }
+        ~JobManager() noexcept;
 
         /**
          * @brief Prepares the job system for execution by starting worker threads.
@@ -77,11 +74,7 @@ namespace YT
          * Sets the running flag and releases worker threads to begin processing jobs.
          * Must be called before any jobs are pushed.
          */
-        void PrepareToRunJobs()
-        {
-            m_Running.store(true, std::memory_order_release);
-            m_RunningSemaphore.release(NumThreads - 1);
-        }
+        void PrepareToRunJobs();
 
         /**
          * @brief Stops job execution by signaling worker threads to stop processing.
@@ -89,21 +82,14 @@ namespace YT
          * Sets the running flag to false, causing worker threads to stop processing jobs.
          * Does not wait for in-progress jobs to complete.
          */
-        void StopRunningJobs()
-        {
-            m_Running.store(false, std::memory_order_release);
-        }
+        void StopRunningJobs();
 
         /**
          * @brief Returns the ID of the current thread.
          * 
          * @return The thread ID (0 for main thread, 1-N for worker threads)
          */
-        static int GetThreadId() noexcept
-        {
-            return g_ThreadID;
-        }
-
+        static int GetThreadId() noexcept;
         /**
          * @brief Pushes a job to be executed on any available thread.
          * 
@@ -112,20 +98,7 @@ namespace YT
          * @note Jobs are distributed round-robin across threads
          * @note If the target thread is busy, the job is executed locally
          */
-        void PushJob(std::coroutine_handle<> handle) noexcept
-        {
-            assert(m_Running.load(std::memory_order_acquire));
-
-            JobBlock & block = m_Blocks[g_NextJobID][g_ThreadID];
-            std::coroutine_handle<> coro = block.m_Handle.exchange(handle, std::memory_order_acq_rel);
-
-            if (coro)
-            {
-                ResumeCoroutine(coro);
-            }
-
-            g_NextJobID = (g_NextJobID + 1) % NumThreads;
-        }
+        void PushJob(std::coroutine_handle<> handle) noexcept;
 
         /**
          * @brief Pushes a job that must execute on the main thread.
@@ -133,13 +106,7 @@ namespace YT
          * @param handle The coroutine handle representing the main thread job
          * @pre JobManager must be running
          */
-        void PushMainThreadJob(std::coroutine_handle<> handle) noexcept
-        {
-            assert(m_Running.load(std::memory_order_relaxed));
-
-            std::lock_guard lock(m_MainThreadJobMutex);
-            m_MainThreadJobs.emplace_back(handle);
-        }
+        void PushMainThreadJob(std::coroutine_handle<> handle) noexcept;
 
         /**
          * @brief Executes jobs until the completion counter reaches the target value.
@@ -147,34 +114,12 @@ namespace YT
          * Processes jobs on the current thread and main thread jobs if running on thread 0.
          * Continues until the counter reaches the specified target value.
          * 
-         * @param counter Atomic counter tracking job completions
+         * @param tracking_block List of atomic counters used for tracking job completions
          * @param target Target value for the counter
          * @pre JobManager must be running (PrepareToRunJobs() has been called)
          * @note Main thread jobs are only processed when called from thread 0
          */
-        void RunJobs(std::atomic_size_t & counter, int target) noexcept
-        {
-            while (true)
-            {
-                ProcessJobList(g_ThreadID);
-
-                if (g_ThreadID == 0)
-                {
-                    std::lock_guard lock(m_MainThreadJobMutex);
-                    for (std::coroutine_handle<> & handle : m_MainThreadJobs)
-                    {
-                        ResumeCoroutine(handle);
-                    }
-
-                    m_MainThreadJobs.clear();
-                }
-
-                if (counter.load(std::memory_order_relaxed) == target)
-                {
-                    break;
-                }
-            }
-        }
+        void RunJobs(const JobCompletionTrackingBlock & tracking_block, int target) noexcept;
 
     private:
         /**
@@ -188,36 +133,7 @@ namespace YT
          * @note This function is called from both PushJob and ProcessJobList
          * @note The coroutine's promise must inherit from JobPromiseBaseData
          */
-        void ResumeCoroutine(std::coroutine_handle<> coro)
-        {
-            coro.resume();
-
-            std::coroutine_handle<JobPromiseBaseData> handle =
-                std::coroutine_handle<JobPromiseBaseData>::from_address(coro.address());
-
-            JobPromiseBaseData & promise = handle.promise();
-
-            if (promise.m_ResumeHandle)
-            {
-                std::coroutine_handle<JobPromiseBaseData> resume_handle =
-                    std::coroutine_handle<JobPromiseBaseData>::from_address(promise.m_ResumeHandle.address());
-
-                JobPromiseBaseData & resume_promise = resume_handle.promise();
-                if (resume_promise.m_IsMainThread)
-                {
-                    PushMainThreadJob(promise.m_ResumeHandle);
-                }
-                else
-                {
-                    PushJob(promise.m_ResumeHandle);
-                }
-            }
-
-            if (coro.done() && promise.m_IncrementCounter)
-            {
-                promise.m_IncrementCounter->fetch_add(1, std::memory_order_relaxed);
-            }
-        }
+        void ResumeCoroutine(std::coroutine_handle<> coro);
 
         /**
          * @brief Processes pending jobs for a specific thread.
@@ -225,53 +141,17 @@ namespace YT
          * @param thread_id The thread ID to process jobs for
          * @return true if a job was processed, false otherwise
          */
-        bool ProcessJobList(int thread_id) noexcept
-        {
-            for (int i = 0; i < NumThreads; ++i)
-            {
-                JobBlock & block = m_Blocks[thread_id][i];
-
-                // First do a load to check if the handle exists
-                if (std::coroutine_handle<> handle_test = block.m_Handle.load(std::memory_order_acquire))
-                {
-                    if (std::coroutine_handle<> handle = block.m_Handle.exchange(nullptr, std::memory_order_acq_rel))
-                    {
-                        ResumeCoroutine(handle);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
+        bool ProcessJobList(int thread_id) noexcept;
 
         /**
          * @brief Main loop for worker threads.
          * 
          * @param thread_id The ID of this worker thread
          */
-        void JobMain(int thread_id) noexcept
-        {
-            g_ThreadID = thread_id;
-            g_NextJobID = (thread_id + 1) % NumThreads;
-            while (!m_Quit.load(std::memory_order_relaxed))
-            {
-                m_RunningSemaphore.acquire();
-
-                int idle_count = 0;
-
-                while (m_Running.load(std::memory_order_acquire))
-                {
-                    if (!ProcessJobList(thread_id))
-                    {
-                        idle_count++;
-                        std::this_thread::yield();
-                    }
-                }
-            }
-        }
+        void JobMain(int thread_id) noexcept;
 
     private:
-        /// Structure for storing a single job in a thread's queue
+        /// Structure for storing a single job in a thread's queue padded to avoid false sharing
         struct JobBlock
         {
             std::atomic<std::coroutine_handle<>> m_Handle = std::coroutine_handle<>(nullptr);
@@ -291,8 +171,11 @@ namespace YT
         JobBlock m_Blocks[NumThreads][NumThreads];          ///< Job queues for each thread
     };
 
+    static constexpr size_t MaxJobAllocSize = 128;  ///< Maximum size of a job allocation
+    export ThreadCachedFixedBlockAllocator<std::uint64_t[MaxJobAllocSize / 8], 4096, 65536> g_JobManagerAllocator;  ///< Allocator for coroutine frames
+
     /// Global JobManager instance
-    export JobManager g_JobManager;
+    export UniquePtr<JobManager> g_JobManager;
 
     export template <typename ReturnType>
     class JobList;
@@ -305,6 +188,8 @@ namespace YT
     export template <typename ReturnType>
     struct JobPromiseType : public JobPromiseBaseData
     {
+        JobPromiseType() = default;
+
         auto get_return_object() { return this; }
 
         void unhandled_exception() noexcept 
@@ -323,6 +208,27 @@ namespace YT
         std::suspend_always initial_suspend() noexcept { return {}; }
         std::suspend_always final_suspend() noexcept { return {}; }
 
+        static void * operator new(size_t size) noexcept
+        {
+            if (size > MaxJobAllocSize)
+            {
+                return std::malloc(size);
+            }
+
+            return g_JobManagerAllocator.Allocate();
+        }
+
+        static void operator delete (void * ptr, std::size_t size) noexcept
+        {
+            if (size > MaxJobAllocSize)
+            {
+                std::free(ptr);
+                return;
+            }
+
+            g_JobManagerAllocator.Free(ptr);
+        }
+
         ReturnType m_ReturnValue;
     };
 
@@ -332,6 +238,11 @@ namespace YT
     export template <>
     struct JobPromiseType<void> : public JobPromiseBaseData
     {
+        JobPromiseType()
+        {
+            m_ReturnVoid = true;
+        }
+
         auto get_return_object() { return this; }
 
         void unhandled_exception() noexcept {}
@@ -339,6 +250,29 @@ namespace YT
 
         std::suspend_always initial_suspend() noexcept { return {}; }
         std::suspend_always final_suspend() noexcept { return {}; }
+
+
+        static void * operator new(size_t size) noexcept
+        {
+            if (size > MaxJobAllocSize)
+            {
+                return std::malloc(size);
+            }
+
+            return g_JobManagerAllocator.Allocate();
+        }
+
+        static void operator delete (void * ptr, std::size_t size) noexcept
+        {
+            if (size > MaxJobAllocSize)
+            {
+                std::free(ptr);
+                return;
+            }
+
+            g_JobManagerAllocator.Free(ptr);
+        }
+
     };
 
     /**
@@ -391,9 +325,12 @@ namespace YT
         {
             if (m_Promise)
             {
-                auto coro = std::coroutine_handle<promise_type>::from_promise(*m_Promise);
-                assert(coro.done());
-                coro.destroy();
+                if constexpr (!std::is_same_v<ReturnType, void>)
+                {
+                    auto coro = std::coroutine_handle<promise_type>::from_promise(*m_Promise);
+                    assert(coro.done());
+                    coro.destroy();
+                }
             }
         }
 
@@ -403,17 +340,18 @@ namespace YT
          * @param counter Pointer to the atomic counter that tracks job completion
          * @note The job will be executed on the main thread if m_IsMainThread is true
          */
-        void RunFromList(std::atomic_size_t * counter)
+        void RunFromList(JobCompletionTrackingBlock * tracking_block)
         {
-            m_Promise->m_IncrementCounter = counter;
+            m_Promise->m_IncrementCounters = tracking_block;
+            m_Promise->m_OwningThread = JobManager::GetThreadId();
 
             if (m_Promise->m_IsMainThread)
             {
-                g_JobManager.PushMainThreadJob(std::coroutine_handle<promise_type>::from_promise(*m_Promise));
+                g_JobManager->PushMainThreadJob(std::coroutine_handle<promise_type>::from_promise(*m_Promise));
             }
             else
             {
-                g_JobManager.PushJob(std::coroutine_handle<promise_type>::from_promise(*m_Promise));
+                g_JobManager->PushJob(std::coroutine_handle<promise_type>::from_promise(*m_Promise));
             }
         }
 
@@ -436,7 +374,7 @@ namespace YT
         void await_suspend(std::coroutine_handle<JobPromiseType<SuspendReturnType>> coro) noexcept
         {
             m_Promise->m_ResumeHandle = coro;
-            g_JobManager.PushJob(std::coroutine_handle<promise_type>::from_promise(*m_Promise));
+            g_JobManager->PushJob(std::coroutine_handle<promise_type>::from_promise(*m_Promise));
         }
 
         std::add_lvalue_reference_t<ReturnType> await_resume() noexcept
@@ -502,9 +440,15 @@ namespace YT
      * @tparam ReturnType The type returned by the jobs in the list
      */
     template <typename ReturnType>
-    class JobList
+    class JobList final
     {
     public:
+
+        void Reserve(std::size_t count)
+        {
+            m_OwnedJobs.reserve(count);
+        }
+
         /**
          * @brief Adds a job to the list.
          * 
@@ -513,7 +457,7 @@ namespace YT
          */
         void PushJob(JobCoro<ReturnType> && coro) noexcept
         {
-            coro.RunFromList(&m_Counter);
+            coro.RunFromList(&m_Counters);
             m_Target++;
 
             m_OwnedJobs.emplace_back(std::move(coro));
@@ -526,7 +470,7 @@ namespace YT
          */
         void WaitForCompletion() noexcept
         {
-            g_JobManager.RunJobs(m_Counter, m_Target);
+            g_JobManager->RunJobs(m_Counters, m_Target);
         }
 
         /**
@@ -543,7 +487,7 @@ namespace YT
 
     private:
         std::vector<JobCoro<ReturnType>> m_OwnedJobs;
-        std::atomic_size_t m_Counter = 0;
+        JobCompletionTrackingBlock m_Counters;
         int m_Target = 0;
     };
 }

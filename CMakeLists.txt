@@ -33,7 +33,6 @@ find_package(GTest CONFIG REQUIRED)
 set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
         Internal/VMA.cpp
-        Internal/JobManagerImpl.cpp
 )
 
 set(YT_MODULE_SOURCES
@@ -48,10 +47,11 @@ set(YT_MODULE_SOURCES
         RenderTypes.ixx
         RenderReflect.ixx
 
+        Internal/BitAllocator.ixx
+        Internal/FixedBlockAllocator.ixx
         Internal/JobManager.ixx
         Internal/RenderManager.ixx
         Internal/WindowManager.ixx
-        Internal/ThreadManager.ixx
         Internal/WindowResource.ixx
         Internal/WindowTable.ixx
         Internal/WidgetRegistry.ixx
@@ -62,6 +62,7 @@ set(YT_MODULE_SOURCES
         Internal/DrawCombiner.ixx
 
         Internal/InitImpl.cpp
+        Internal/JobManagerImpl.cpp
         Internal/DrawerImpl.cpp
         Internal/WindowImpl.cpp
         Internal/WindowManagerImpl.cpp
@@ -149,4 +150,12 @@ add_yt_test_executable(YTBlockTableUnitTests
 
 add_yt_test_executable(YTJobManagerUnitTests
         Tests/Empty.cpp Tests/JobManagerTests.cpp
+)
+
+add_yt_test_executable(YTBitAllocatorUnitTests
+        Tests/Empty.cpp Tests/BitAllocatorTests.cpp
+)
+
+add_yt_test_executable(YTFixedBlockAllocatorUnitTests
+        Tests/Empty.cpp Tests/FixedBlockAllocatorTests.cpp
 )
