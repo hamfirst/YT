@@ -108,6 +108,11 @@ namespace YT
         float m_Random2 = 0.0f;
     };
 
+    export struct IndexData
+    {
+        uint32_t m_Index = 0;
+    };
+
     export struct QuadRenderTypeId
     {
         int m_QuadRenderTypeIndex = 0;

@@ -36,10 +36,11 @@ namespace YT
 		}
 
 		bool BuildShader(const vk::ShaderStageFlagBits shader_type, const StringView & file_name,
-			const StringView & shader_code, std::vector<unsigned int> & spirv)
+			const StringView & shader_code, std::vector<unsigned int> & spirv, const Optional<String> & entry_point)
 		{
-		String result, error;
+			String result, error;
 			Set<String> already_included;
+
 			if (!ReplaceIncludes(shader_code, file_name, already_included, result, error))
 			{
 				FatalPrint("{}", error);
@@ -51,7 +52,7 @@ namespace YT
 				result.replace(pos, 1, "  ");
 			}
 
-			return GLSLtoSPV(shader_type, result.data(), spirv);
+			return GLSLtoSPV(shader_type, result.data(), spirv, entry_point);
 		}
 
 		static EShLanguage FindLanguage(const vk::ShaderStageFlagBits shader_type) noexcept
@@ -206,7 +207,7 @@ namespace YT
 		}
 
 		static bool GLSLtoSPV(const vk::ShaderStageFlagBits shader_type, const char * shader_code,
-		                      std::vector<unsigned int> & spirv)
+		                      std::vector<unsigned int> & spirv, const Optional<String> & entry_point)
 		{
 			VerbosePrint("Compiling shader:\n{}", shader_code);
 
@@ -221,6 +222,12 @@ namespace YT
 			shader_strings[0] = shader_code;
 			shader.setStrings(shader_strings, 1);
 
+			if (entry_point)
+			{
+				shader.setEntryPoint(entry_point.value().data());
+				shader.setSourceEntryPoint("main");
+			}
+
 			if (!shader.parse(GetDefaultResources(), 100, false, messages))
 			{
 				FatalPrint("{}", shader.getInfoLog());
@@ -232,8 +239,8 @@ namespace YT
 
 			if (!program.link(messages))
 			{
-				FatalPrint("{}", shader.getInfoLog());
-				FatalPrint("{}", shader.getInfoDebugLog());
+				FatalPrint("{}", program.getInfoLog());
+				FatalPrint("{}", program.getInfoDebugLog());
 				return false;
 			}
 

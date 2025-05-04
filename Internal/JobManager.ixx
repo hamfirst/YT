@@ -16,9 +16,6 @@ import :FixedBlockAllocator;
 
 namespace YT
 {
-    /// Number of worker threads (including main thread)
-    static constexpr int NumThreads = 1;
-
     struct JobCompletionTrackingElement
     {
         std::size_t m_LocalCount = 0;
@@ -26,7 +23,7 @@ namespace YT
         std::byte m_Pad[std::hardware_destructive_interference_size - sizeof(m_LocalCount) - sizeof(m_RemoteCount)] = {};
     };
 
-    using JobCompletionTrackingBlock = std::array<JobCompletionTrackingElement, NumThreads>;
+    using JobCompletionTrackingBlock = std::array<JobCompletionTrackingElement, Threading::NumThreads>;
 
     /**
      * @brief Base data structure for job promises.
@@ -48,7 +45,7 @@ namespace YT
     {
     public:
 
-        static constexpr int NumThreads = YT::NumThreads;  ///< Number of worker threads (including main thread)
+        static constexpr int NumThreads = Threading::NumThreads;  ///< Number of worker threads (including main thread)
 
         static bool CreateJobManager() noexcept;
 

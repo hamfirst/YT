@@ -178,7 +178,7 @@ namespace YT
         StringView class_name = std::meta::identifier_of(^^T);
 
         return std::format(
-            "layout(std140, set = {}, binding = {}) readonly buffer {}BufferType\n"
+            "layout(std430, set = {}, binding = {}) readonly buffer {}BufferType\n"
             "{{\n"
             "    {} elems[];\n"
             "}} {}_buffer;\n"

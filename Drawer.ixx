@@ -10,7 +10,6 @@ export module YT:Drawer;
 
 import :Types;
 import :RenderTypes;
-import :DrawCombiner;
 
 namespace YT
 {
@@ -24,12 +23,16 @@ namespace YT
 
         void DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color) noexcept;
 
-        void FlushIfNeeded() noexcept;
+        void Flush() noexcept;
     private:
 
-        template<typename T>
-        void Flush(const DrawList<T> & t);
+        enum class DrawType
+        {
+            None,
+            Quad,
+        };
 
+        void FlushIfNeeded(DrawType pending_draw_type) noexcept;
 
     private:
 
@@ -37,7 +40,14 @@ namespace YT
         DrawerData m_DrawerData;
         PSODeferredSettings m_PSODeferredSettings;
 
-        DrawCombiner<QuadData> m_DrawCombiner;
+        DrawType m_DrawType = DrawType::None;
+        size_t m_DrawCount = 0;
+
+        Optional<uint32_t> m_FirstDrawElemIndex = {};
+        Optional<uint32_t> m_PreviousDrawElemIndex = {};
+        bool m_ConsecutiveDraws = true;
+
+        Vector<IndexData> m_DrawElemIndexData;
     };
 
 }

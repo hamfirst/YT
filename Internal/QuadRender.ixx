@@ -19,8 +19,9 @@ namespace YT
 
         explicit QuadRender(const ApplicationInitInfo & init_info);
 
-        [[nodiscard]] BufferTypeId GetQuadBufferTypeUd() const noexcept;
-        [[nodiscard]] PSOHandle GetQuadPSOHandle() const noexcept;
+        [[nodiscard]] BufferTypeId GetQuadBufferTypeId() const noexcept;
+        [[nodiscard]] PSOHandle GetQuadConsecutivePSOHandle() const noexcept;
+        [[nodiscard]] PSOHandle GetQuadIndexedPSOHandle() const noexcept;
 
         QuadRenderTypeId RegisterQuadShader(const StringView & function_name, const StringView & shader_code) noexcept;
 
@@ -37,10 +38,12 @@ namespace YT
         };
 
         BufferTypeId m_QuadBufferTypeId;
-        PSOHandle m_PSOHandle;
+        PSOHandle m_ConsecutivePSOHandle;
+        PSOHandle m_IndexedPSOHandle;
 
         Vector<ShaderData> m_ShaderData;
-        Vector<uint32_t> m_VertexShaderBinary;
+        Vector<uint32_t> m_ConsecutiveVertexShaderBinary;
+        Vector<uint32_t> m_IndexedVertexShaderBinary;
         Vector<uint32_t> m_FragmentShaderBinary;
         bool m_NeedsRecompile = true;
     };

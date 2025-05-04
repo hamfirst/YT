@@ -16,6 +16,7 @@ import :WindowResource;
 import :BlockTable;
 import :TransientBuffer;
 import :ShaderBuilder;
+import :BitAllocator;
 import :Delegate;
 
 namespace YT
@@ -43,7 +44,8 @@ namespace YT
         void UnregisterShader(const uint8_t* shader_data) noexcept;
         void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
         [[nodiscard]] bool CompileShader(const StringView & shader_code, ShaderType type,
-            const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data) noexcept;
+            const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data,
+            const Optional<String> & entry_point = {}) noexcept;
 
         MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
         [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, size_t push_data_size,
@@ -53,6 +55,7 @@ namespace YT
             uint32_t aligned_element_size, size_t buffer_size) noexcept;
 
         BufferTypeId GetGlobalBufferTypeId() const noexcept;
+        BufferTypeId GetIndexBufferTypeId() const noexcept;
 
         BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept;
 
@@ -115,6 +118,7 @@ namespace YT
         Vector<BufferType> m_BufferTypes;
 
         BufferTypeId m_GlobalBufferTypeId;
+        BufferTypeId m_IndexBufferTypeId;
 
         vk::UniqueDescriptorSetLayout m_BufferDescriptorSetLayout;
         vk::UniqueDescriptorPool m_BufferDescriptorPool;
@@ -125,6 +129,7 @@ namespace YT
         vk::UniqueDescriptorSetLayout m_ImageDescriptorSetLayout;
         vk::UniqueDescriptorPool m_ImageDescriptorPool;
         vk::DescriptorSet m_ImageDescriptorSet;
+        BitAllocator m_ImageSlotAllocator;
 
         // Frame resources
         struct FrameResource

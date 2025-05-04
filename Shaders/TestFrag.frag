@@ -11,7 +11,7 @@ struct GlobalData
 	float m_Random2;
 };
 
-layout(std140, set = 0, binding = 0) readonly buffer GlobalDataBufferType
+layout(std430, set = 0, binding = 0) readonly buffer GlobalDataBufferType
 {
     GlobalData elems[];
 } GlobalDataBuffer;

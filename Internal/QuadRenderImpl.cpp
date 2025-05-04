@@ -58,25 +58,39 @@ namespace YT
 
         constexpr StringView vertex_shader(g_Quad_VS, sizeof(g_Quad_VS));
         if (!g_RenderManager->CompileShader(vertex_shader,
-            ShaderType::Vertex, "QuadShader_VS", m_VertexShaderBinary))
+            ShaderType::Vertex, "QuadShader_VS", m_ConsecutiveVertexShaderBinary, "mainConsecutive"))
         {
-            throw Exception("Failed to compile quad vertex shader code");
+            throw Exception("Failed to compile consecutive quad vertex shader code");
         }
 
-        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_VertexShaderBinary.data()),
-            m_VertexShaderBinary.size() * sizeof(m_VertexShaderBinary[0]));
+        if (!g_RenderManager->CompileShader(vertex_shader,
+            ShaderType::Vertex, "QuadShader_VS", m_IndexedVertexShaderBinary, "mainIndexed"))
+        {
+            throw Exception("Failed to compile indexed quad vertex shader code");
+        }
+
+        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_ConsecutiveVertexShaderBinary.data()),
+            m_ConsecutiveVertexShaderBinary.size() * sizeof(m_ConsecutiveVertexShaderBinary[0]));
+
+        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_IndexedVertexShaderBinary.data()),
+            m_IndexedVertexShaderBinary.size() * sizeof(m_IndexedVertexShaderBinary[0]));
 
         g_RenderManager->GetPreRenderDelegate().BindNoValidityCheck([this]() { UpdateShader(); });
     }
 
-    BufferTypeId QuadRender::GetQuadBufferTypeUd() const noexcept
+    BufferTypeId QuadRender::GetQuadBufferTypeId() const noexcept
     {
         return m_QuadBufferTypeId;
     }
 
-    PSOHandle QuadRender::GetQuadPSOHandle() const noexcept
+    PSOHandle QuadRender::GetQuadConsecutivePSOHandle() const noexcept
     {
-        return m_PSOHandle;
+        return m_ConsecutivePSOHandle;
+    }
+
+    PSOHandle QuadRender::GetQuadIndexedPSOHandle() const noexcept
+    {
+        return m_IndexedPSOHandle;
     }
 
     QuadRenderTypeId QuadRender::RegisterQuadShader(const StringView & function_name, const StringView & shader_code) noexcept
@@ -103,10 +117,15 @@ namespace YT
             if (Recompile())
             {
                 PSOCreateInfo pso_info;
-                pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_VertexShaderBinary.data());
+                pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_ConsecutiveVertexShaderBinary.data());
+                pso_info.m_VertexShaderEntryPoint = "mainConsecutive";
                 pso_info.m_FragmentShader = reinterpret_cast<uint8_t *>(m_FragmentShaderBinary.data());
                 pso_info.m_PushConstantsSize = sizeof(QuadRenderData);
-                m_PSOHandle = g_RenderManager->RegisterPSO(pso_info);
+                m_ConsecutivePSOHandle = g_RenderManager->RegisterPSO(pso_info);
+
+                pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_IndexedVertexShaderBinary.data());
+                pso_info.m_VertexShaderEntryPoint = "mainIndexed";
+                m_IndexedPSOHandle = g_RenderManager->RegisterPSO(pso_info);
             }
             m_NeedsRecompile = false;
         }

@@ -59,7 +59,6 @@ set(YT_MODULE_SOURCES
         Internal/TransientBuffer.ixx
         Internal/ShaderBuilder.ixx
         Internal/QuadRender.ixx
-        Internal/DrawCombiner.ixx
 
         Internal/InitImpl.cpp
         Internal/JobManagerImpl.cpp
@@ -158,4 +157,8 @@ add_yt_test_executable(YTBitAllocatorUnitTests
 
 add_yt_test_executable(YTFixedBlockAllocatorUnitTests
         Tests/Empty.cpp Tests/FixedBlockAllocatorTests.cpp
+)
+
+add_yt_test_executable(YTDelegateUnitTests
+        Tests/Empty.cpp Tests/DelegateTests.cpp
 )

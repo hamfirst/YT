@@ -12,6 +12,63 @@ import :Types;
 
 namespace YT
 {
+    template <typename T>
+    class TransientBufferSize
+    {
+    public:
+        TransientBufferSize() noexcept
+            : m_Size(0)
+        {
+
+        }
+
+        TransientBufferSize(const TransientBufferSize &) noexcept = default;
+        TransientBufferSize(TransientBufferSize &&) noexcept = default;
+        TransientBufferSize & operator=(const TransientBufferSize &) noexcept = default;
+        TransientBufferSize & operator=(TransientBufferSize &&) noexcept = default;
+        ~TransientBufferSize() noexcept = default;
+
+        void Reset() noexcept
+        {
+            if constexpr (std::is_same_v<T, size_t>)
+            {
+                m_Size = 0;
+            }
+            else
+            {
+                m_Size.store(0, std::memory_order_release);
+            }
+        }
+
+        size_t IncreaseSize(size_t size) noexcept
+        {
+            if constexpr (std::is_same_v<T, size_t>)
+            {
+                size_t old_size = m_Size;
+                m_Size += size;
+                return old_size;
+            }
+            else
+            {
+                return m_Size.fetch_add(size, std::memory_order_acq_rel);
+            }
+        }
+
+        size_t GetSize() const noexcept
+        {
+            if constexpr (std::is_same_v<T, size_t>)
+            {
+                return m_Size;
+            }
+            else
+            {
+                return m_Size.load(std::memory_order_relaxed);
+            }
+        }
+
+        T m_Size;
+    };
+
     export class TransientBuffer
     {
     public:
@@ -43,7 +100,7 @@ namespace YT
         bool Begin() noexcept
         {
             m_Ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
-            m_BufferSize.store(0, std::memory_order_seq_cst);
+            m_BufferSize.Reset();
             return true;
         }
 
@@ -55,7 +112,7 @@ namespace YT
                 return UINT64_MAX;
             }
 
-            uint64_t start = m_BufferSize.fetch_add(size);
+            uint64_t start = m_BufferSize.IncreaseSize(size);
 
             if (start + size > m_AllocationSize)
             {
@@ -75,7 +132,7 @@ namespace YT
                 return MakePair(nullptr, UINT64_MAX);
             }
 
-            uint64_t start = m_BufferSize.fetch_add(size, std::memory_order_acq_rel);
+            uint64_t start = m_BufferSize.IncreaseSize(size);
 
             if (start + size > m_AllocationSize)
             {
@@ -88,7 +145,7 @@ namespace YT
 
         [[nodiscard]] size_t GetSize() const noexcept
         {
-            return m_BufferSize;
+            return m_BufferSize.GetSize();
         }
 
         void Transfer(vk::CommandBuffer & command_buffer, vk::Buffer & buffer, size_t offset) noexcept
@@ -124,7 +181,9 @@ namespace YT
         size_t m_AllocationSize;
         vma::UniqueBuffer m_Buffer;
         vma::UniqueAllocation m_Allocation;
-        std::atomic<size_t> m_BufferSize;
+
+        using BufferSizeType = std::conditional_t<Threading::NumThreads == 1, TransientBufferSize<size_t>, TransientBufferSize<std::atomic<size_t>>>;
+        BufferSizeType m_BufferSize;
 
         std::byte * m_Ptr = nullptr;
     };

@@ -26,6 +26,8 @@ namespace YT
 
     void Drawer::DrawRaw(PSOHandle pso_handle, uint32_t num_verts) noexcept
     {
+        FlushIfNeeded(DrawType::None);
+
         if (g_RenderManager->BindPSO(m_CommandBuffer, nullptr, 0, m_PSODeferredSettings, pso_handle))
         {
             m_CommandBuffer.draw(num_verts, 1, 0, 0);
@@ -34,60 +36,90 @@ namespace YT
 
     void Drawer::DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color) noexcept
     {
-        QuadData quad_data
+        FlushIfNeeded(DrawType::Quad);
+
+        auto [ptr, data_handle] = g_RenderManager->ReserveBufferSpace(
+            g_QuadRender->GetQuadBufferTypeId(), sizeof(QuadData));
+
+        new (ptr) QuadData
         {
             .m_Start = start / m_DrawerData.m_Size,
             .m_End = (start + size) / m_DrawerData.m_Size,
             .m_Color = color,
         };
 
-        m_DrawCombiner.PushData(quad_data);
-    }
+        m_DrawCount++;
 
-    void Drawer::FlushIfNeeded() noexcept
-    {
-        if (m_DrawCombiner.NeedsFlush())
+        uint32_t index = static_cast<uint32_t>(data_handle.m_Index);
+        if (!m_FirstDrawElemIndex.has_value())
         {
-            m_DrawCombiner.Flush([this](auto & draw_data) { Flush(draw_data); });
-        }
-    }
-
-    template <typename T>
-    void Drawer::Flush(const DrawList<T> & t)
-    {
-        Vector<Span<const T>> draw_datas = t.Summarize();
-
-        size_t total_size = 0;
-        for (Span<const T> & draw_data : draw_datas)
-        {
-            total_size += draw_data.size();
+            m_FirstDrawElemIndex = index;
         }
 
-        if constexpr (std::is_same_v<T, QuadData>)
+        if constexpr (Threading::NumThreads > 1)
         {
-            auto [ptr, data_handle] =
-                g_RenderManager->ReserveBufferSpace(g_QuadRender->GetQuadBufferTypeUd(), sizeof(T) * total_size);
-
-            if (ptr)
+            if (m_PreviousDrawElemIndex.has_value() && index != m_PreviousDrawElemIndex.value() + 1)
             {
-                for (Span<const T> & draw_data : draw_datas)
+                m_ConsecutiveDraws = false;
+            }
+
+            m_PreviousDrawElemIndex = index;
+
+            m_DrawElemIndexData.push_back(IndexData
                 {
-                    size_t copy_size = draw_data.size() * sizeof(T);
-                    memcpy(ptr, draw_data.data(), copy_size);
-                    ptr += copy_size;
+                    .m_Index = index
+                });
+        }
+    }
+
+    void Drawer::Flush() noexcept
+    {
+        FlushIfNeeded(DrawType::None);
+    }
+
+    void Drawer::FlushIfNeeded(DrawType pending_draw_type) noexcept
+    {
+        if (m_DrawType != pending_draw_type)
+        {
+            if (m_DrawType == DrawType::Quad)
+            {
+                if constexpr (Threading::NumThreads > 1 && !m_ConsecutiveDraws)
+                {
+                    auto [ptr, handle] =
+                        g_RenderManager->ReserveBufferSpace(g_RenderManager->GetIndexBufferTypeId(), m_DrawElemIndexData.size());
+
+                    memcpy(ptr, m_DrawElemIndexData.data(), m_DrawElemIndexData.size() * sizeof(IndexData));
+                    m_DrawElemIndexData.clear();
+
+                    QuadRenderData render_data;
+                    render_data.m_QuadIndex = handle.m_Index;
+                    render_data.m_Count = static_cast<int>(m_DrawCount);
+
+                    if (g_RenderManager->BindPSO(m_CommandBuffer, &render_data, sizeof(render_data),
+                        m_PSODeferredSettings, g_QuadRender->GetQuadIndexedPSOHandle()))
+                    {
+                        m_CommandBuffer.draw(m_DrawCount * 6, 1, 0, 0);
+                    }
+                }
+                else
+                {
+                    QuadRenderData render_data;
+                    render_data.m_QuadIndex = m_FirstDrawElemIndex.value();
+                    render_data.m_Count = static_cast<int>(m_DrawCount);
+
+                    if (g_RenderManager->BindPSO(m_CommandBuffer, &render_data, sizeof(render_data),
+                        m_PSODeferredSettings, g_QuadRender->GetQuadConsecutivePSOHandle()))
+                    {
+                        m_CommandBuffer.draw(m_DrawCount * 6, 1, 0, 0);
+                    }
                 }
             }
 
-            QuadRenderData render_data;
-            render_data.m_QuadIndex = data_handle.m_Index;
-            render_data.m_Count = static_cast<int>(total_size);
-
-            if (g_RenderManager->BindPSO(m_CommandBuffer, &render_data, sizeof(render_data),
-                m_PSODeferredSettings, g_QuadRender->GetQuadPSOHandle()))
-            {
-                m_CommandBuffer.draw(total_size * 6, 1, 0, 0);
-            }
+            m_DrawType = pending_draw_type;
+            m_DrawCount = 0;
+            m_FirstDrawElemIndex = {};
+            m_PreviousDrawElemIndex = {};
+            m_ConsecutiveDraws = true;
         }
     }
-
 }

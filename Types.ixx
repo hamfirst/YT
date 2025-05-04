@@ -19,6 +19,13 @@ export module YT:Types;
 
 namespace YT
 {
+    /// Number of worker threads (including main thread)
+    export class Threading
+    {
+    public:
+        static constexpr int NumThreads = 1;
+    };
+
     export template<typename T>
     using Vector = std::vector<T>;
 

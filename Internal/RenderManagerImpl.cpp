@@ -601,7 +601,7 @@ namespace YT
                     Drawer drawer(resource.m_CommandBuffers[resource.m_FrameIndex].get(), drawer_data, pso_deferred_settings);
                     resource.m_Widget->OnDraw(drawer);
 
-                    drawer.FlushIfNeeded();
+                    drawer.Flush();
 
                     if (!CompleteCommandBuffer(resource))
                     {
@@ -773,7 +773,8 @@ namespace YT
     }
 
     bool RenderManager::CompileShader(const StringView & shader_code, ShaderType type,
-        const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data) noexcept
+        const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data,
+        const Optional<String> & entry_point) noexcept
     {
         vk::ShaderStageFlagBits vk_shader_type = vk::ShaderStageFlagBits::eFragment;
         switch (type)
@@ -787,7 +788,7 @@ namespace YT
         }
 
         return m_ShaderBuilder.BuildShader(vk_shader_type, file_name_for_log_output,
-            shader_code, out_shader_data);
+            shader_code, out_shader_data, entry_point);
     }
 
     MaybeInvalid<PSOHandle> RenderManager::RegisterPSO(const PSOCreateInfo & create_info) noexcept
@@ -860,6 +861,11 @@ namespace YT
         return m_GlobalBufferTypeId;
     }
 
+    BufferTypeId RenderManager::GetIndexBufferTypeId() const noexcept
+    {
+        return m_IndexBufferTypeId;
+    }
+
     BufferDataHandle RenderManager::WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept
     {
         auto [ptr, buffer_handle] = ReserveBufferSpace(buffer_type_id, data_size);
@@ -890,6 +896,7 @@ namespace YT
     void RenderManager::RegisterRenderGlobals()
     {
         m_GlobalBufferTypeId = RegisterShaderBufferStruct<GlobalData>(1);
+        m_IndexBufferTypeId = RegisterShaderBufferStruct<IndexData>(128 * 1024);
     }
 
     bool RenderManager::CreateSwapChainResources(WindowResource & resource) noexcept
