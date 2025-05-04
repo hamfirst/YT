@@ -32,43 +32,48 @@ find_package(GTest CONFIG REQUIRED)
 
 set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
-        Internal/VMA.cpp
+        src/Render/VMA.cpp
 )
 
 set(YT_MODULE_SOURCES
-        YT.ixx
-        Drawer.ixx
-        Init.ixx
-        Types.ixx
-        Widget.ixx
-        Window.ixx
-        Delegate.ixx
-        WindowTypes.ixx
-        RenderTypes.ixx
-        RenderReflect.ixx
+        src/Allocators/BitAllocator.ixx
+        src/Allocators/BlockTable.ixx
+        src/Allocators/FixedBlockAllocator.ixx
 
-        Internal/BitAllocator.ixx
-        Internal/FixedBlockAllocator.ixx
-        Internal/JobManager.ixx
-        Internal/RenderManager.ixx
-        Internal/WindowManager.ixx
-        Internal/WindowResource.ixx
-        Internal/WindowTable.ixx
-        Internal/WidgetRegistry.ixx
-        Internal/BlockTable.ixx
-        Internal/TransientBuffer.ixx
-        Internal/ShaderBuilder.ixx
-        Internal/QuadRender.ixx
+        src/Delegate/Delegate.ixx
 
-        Internal/InitImpl.cpp
-        Internal/JobManagerImpl.cpp
-        Internal/DrawerImpl.cpp
-        Internal/WindowImpl.cpp
-        Internal/WindowManagerImpl.cpp
-        Internal/RenderManagerImpl.cpp
-        Internal/RenderReflectImpl.cpp
-        Internal/QuadRenderImpl.cpp
-        Internal/YTImpl.cpp
+        src/Init/Init.ixx
+        src/Init/InitImpl.cpp
+
+        src/Job/JobManager.ixx
+        src/Job/JobManagerImpl.cpp
+
+        src/Render/Drawer.ixx
+        src/Render/DrawerImpl.cpp
+        src/Render/QuadRender.ixx
+        src/Render/QuadRenderImpl.cpp
+        src/Render/RenderManager.ixx
+        src/Render/RenderManagerImpl.cpp
+        src/Render/RenderReflect.ixx
+        src/Render/RenderReflectImpl.cpp
+        src/Render/RenderTypes.ixx
+        src/Render/ShaderBuilder.ixx
+        src/Render/TransientBuffer.ixx
+
+        src/Widget/Widget.ixx
+        src/Widget/WidgetRegistry.ixx
+
+        src/Window/Window.ixx
+        src/Window/WindowImpl.cpp
+        src/Window/WindowManager.ixx
+        src/Window/WindowManagerImpl.cpp
+        src/Window/WindowResource.ixx
+        src/Window/WindowTable.ixx
+        src/Window/WindowTypes.ixx
+
+        src/Types.ixx
+        src/YT.ixx
+        src/YTImpl.cpp
 )
 
 set(YT_LINK_LIBRARIES
@@ -123,8 +128,8 @@ add_yt_executable(YTTest
         main.cpp
 )
 
-set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Shaders")
-set(SPV_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Shaders/bin")
+set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+set(SPV_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders/bin")
 file(MAKE_DIRECTORY ${SPV_OUTPUT_DIR})
 
 file(GLOB_RECURSE SHADERS "${SHADER_DIR}/*.vert" "${SHADER_DIR}/*.frag")
@@ -144,21 +149,21 @@ foreach(SHADER_PATH ${SHADERS})
 endforeach()
 
 add_yt_test_executable(YTBlockTableUnitTests
-        Tests/Empty.cpp Tests/BlockTableTests.cpp
+        tests/Empty.cpp tests/BlockTableTests.cpp
 )
 
 add_yt_test_executable(YTJobManagerUnitTests
-        Tests/Empty.cpp Tests/JobManagerTests.cpp
+        tests/Empty.cpp tests/JobManagerTests.cpp
 )
 
 add_yt_test_executable(YTBitAllocatorUnitTests
-        Tests/Empty.cpp Tests/BitAllocatorTests.cpp
+        tests/Empty.cpp tests/BitAllocatorTests.cpp
 )
 
 add_yt_test_executable(YTFixedBlockAllocatorUnitTests
-        Tests/Empty.cpp Tests/FixedBlockAllocatorTests.cpp
+        tests/Empty.cpp tests/FixedBlockAllocatorTests.cpp
 )
 
 add_yt_test_executable(YTDelegateUnitTests
-        Tests/Empty.cpp Tests/DelegateTests.cpp
+        tests/Empty.cpp tests/DelegateTests.cpp
 )

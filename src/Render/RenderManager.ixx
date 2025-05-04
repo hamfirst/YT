@@ -107,7 +107,7 @@ namespace YT
         Delegate<void ()> m_PreRenderDelegate;
         Delegate<void ()> m_PostRenderDelegate;
 
-        // Shaders
+        // shaders
         Map<const uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
         ShaderBuilder m_ShaderBuilder;
 

@@ -13,12 +13,12 @@ PSOHandle g_PSOHandle;
 
 uint8_t g_TestTriangle_VS[] =
 {
-#embed "../Shaders/bin/TestTriangle.spv"
+#embed "../shaders/bin/TestTriangle.spv"
 };
 
 uint8_t g_TestFrag_FS[] =
 {
-#embed "../Shaders/bin/TestFrag.spv"
+#embed "../shaders/bin/TestFrag.spv"
 };
 
 class TestWidget : public Widget<TestWidget>

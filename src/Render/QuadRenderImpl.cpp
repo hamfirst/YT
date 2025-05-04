@@ -14,22 +14,22 @@ namespace YT
 {
     constexpr char g_Quad_VS[] =
     {
-#embed "../Shaders/Quad/Quad.qvert"
+#embed "../shaders/Quad/Quad.qvert"
     };
 
     constexpr char g_QuadHeader_FS[] =
     {
-#embed "../Shaders/Quad/Header.qfrag"
+#embed "../shaders/Quad/Header.qfrag"
     };
 
     constexpr char g_QuadMain_FS[] =
     {
-#embed "../Shaders/Quad/Main.qfrag"
+#embed "../shaders/Quad/Main.qfrag"
     };
 
     constexpr char g_QuadFooter_FS[] =
     {
-#embed "../Shaders/Quad/Footer.qfrag"
+#embed "../shaders/Quad/Footer.qfrag"
     };
 
     bool QuadRender::CreateQuadRender(const ApplicationInitInfo & init_info) noexcept
