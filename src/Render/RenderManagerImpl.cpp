@@ -3,8 +3,11 @@ module;
 #include <memory>
 #include <iostream>
 #include <unordered_map>
+#include <any>
 
 #include <glm/glm.hpp>
+
+#include <stb_image.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -758,7 +761,7 @@ namespace YT
     {
         if (auto shader_module = m_ShaderModules.find(shader_data); shader_module != m_ShaderModules.end())
         {
-            PushDeletionCallback([this, shader_module_ptr = shader_module->second.release()]()
+            PushDeferredDeleteCallback([this, shader_module_ptr = shader_module->second.release()]()
             {
                m_Device->destroyShaderModule(shader_module_ptr);
             });
@@ -891,6 +894,60 @@ namespace YT
         };
 
         return MakePair(ptr, data_handle);
+    }
+
+    MaybeInvalid<ImageReference> RenderManager::CreateImage(const Span<const std::byte>& data) noexcept
+    {
+        int tex_width, tex_height, tex_channels;
+        stbi_uc* pixels = stbi_load_from_memory(reinterpret_cast<stbi_uc const *>(data.data()),
+            static_cast<int>(data.size()), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
+
+        if (!pixels || tex_channels != STBI_rgb_alpha)
+        {
+            return {};
+        }
+
+        try
+        {
+            UniquePtr<StagingBuffer> staging_buffer = MakeUnique<StagingBuffer>(
+                m_Device, m_Allocator, pixels, tex_width * tex_height * 4);
+
+            vk::CommandBufferAllocateInfo allocate_info;
+            allocate_info.commandPool = m_CommandPool.get();
+            allocate_info.level = vk::CommandBufferLevel::ePrimary;
+            allocate_info.commandBufferCount = 1;
+
+            auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
+            vk::UniqueCommandBuffer command_buffer = std::move(buffer_list.front());
+
+            vk::CommandBufferBeginInfo begin_info;
+            command_buffer->begin(begin_info);
+
+            auto handle = m_ImageTable.AllocateHandle(m_Device, m_Allocator, command_buffer.get(),
+                *staging_buffer.get(), tex_width, tex_height, ImageFormat::R8G8B8A8Unorm);
+
+            ImageHandle image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
+            uint32_t image_index = image_handle.m_BlockIndex * ImageTable::BlockSizeValue + image_handle.m_ElemIndex;
+
+            command_buffer->end();
+
+            PushDeferredDeleteObject(std::move(staging_buffer));
+            PushDeferredDeleteObject(std::move(command_buffer));
+
+
+        }
+        catch (...)
+        {
+            FatalPrint("Failed to allocate staging buffer");
+            return {};
+        }
+
+        return {};
+    }
+
+    void RenderManager::DestroyImage(ImageHandle handle) noexcept
+    {
+
     }
 
     void RenderManager::RegisterRenderGlobals()
@@ -1043,7 +1100,7 @@ namespace YT
         {
             if (m_BufferDescriptorPool.get())
             {
-                PushDeletionCallback([this, buffer_pool = m_BufferDescriptorPool.release()]() mutable
+                PushDeferredDeleteCallback([this, buffer_pool = m_BufferDescriptorPool.release()]() mutable
                 {
                     m_Device->destroyDescriptorPool(buffer_pool);
                 });
@@ -1051,7 +1108,7 @@ namespace YT
 
             if (m_BufferDescriptorSetLayout.get())
             {
-                PushDeletionCallback([this, buffer_set_layout = m_BufferDescriptorSetLayout.release()]() mutable
+                PushDeferredDeleteCallback([this, buffer_set_layout = m_BufferDescriptorSetLayout.release()]() mutable
                 {
                     m_Device->destroyDescriptorSetLayout(buffer_set_layout);
                 });

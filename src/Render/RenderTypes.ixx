@@ -12,6 +12,11 @@ import :BlockTable;
 
 namespace YT
 {
+    export enum class ImageFormat
+    {
+        R8G8B8A8Unorm,
+    };
+
     export enum class ShaderType
     {
         Vertex,
@@ -63,15 +68,12 @@ namespace YT
         }
     };
 
-    export struct PSO
-    {
-        PSOCreateInfo m_CreateInfo;
-        Vector<PSOVariant> m_Variants;
-    };
-
-    export using PSOTable = BlockTable<PSO>;
     export struct PSOHandle : public BlockTableHandle { };
     export constexpr PSOHandle InvalidPSOHandle = MakeCustomBlockTableHandle<PSOHandle>(InvalidBlockTableHandle);
+
+    export struct ImageHandle : public BlockTableHandle { };
+
+    export constexpr ImageHandle InvalidImageHandle = MakeCustomBlockTableHandle<ImageHandle>(InvalidBlockTableHandle);
 
     export struct BufferType
     {

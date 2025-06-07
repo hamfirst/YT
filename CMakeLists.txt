@@ -6,6 +6,7 @@ set(VCPKG_HOST_TRIPLET x64-linux-libcpp)
 project(YT)
 
 set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_FLAGS "-stdlib=libc++ -freflection-latest")
 set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++")
@@ -19,6 +20,7 @@ find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 find_package(Freetype)
 find_path(PLF_HIVE_INCLUDE_DIRS "plf_hive.h")
 find_package(glm CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 
 find_package(ECM CONFIG REQUIRED NO_MODULE)
 list(INSERT CMAKE_MODULE_PATH 0 ${ECM_MODULE_PATH})
@@ -33,12 +35,14 @@ find_package(GTest CONFIG REQUIRED)
 set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
         src/Render/VMA.cpp
+        src/Render/STBI.cpp
 )
 
 set(YT_MODULE_SOURCES
         src/Allocators/BitAllocator.ixx
         src/Allocators/BlockTable.ixx
         src/Allocators/FixedBlockAllocator.ixx
+        src/Allocators/ObjectPool.ixx
 
         src/Delegate/Delegate.ixx
 
@@ -48,8 +52,12 @@ set(YT_MODULE_SOURCES
         src/Job/JobManager.ixx
         src/Job/JobManagerImpl.cpp
 
+        src/Render/DeferredDelete.ixx
         src/Render/Drawer.ixx
         src/Render/DrawerImpl.cpp
+        src/Render/ImageBuffer.ixx
+        src/Render/ImageReference.ixx
+        src/Render/ImageReferenceImpl.cpp
         src/Render/QuadRender.ixx
         src/Render/QuadRenderImpl.cpp
         src/Render/RenderManager.ixx
@@ -58,6 +66,7 @@ set(YT_MODULE_SOURCES
         src/Render/RenderReflectImpl.cpp
         src/Render/RenderTypes.ixx
         src/Render/ShaderBuilder.ixx
+        src/Render/StagingBuffer.ixx
         src/Render/TransientBuffer.ixx
 
         src/Widget/Widget.ixx
@@ -99,6 +108,7 @@ function(add_yt_executable TARGET_NAME SOURCES)
     target_include_directories(${TARGET_NAME} PRIVATE
             ${CMAKE_CURRENT_BINARY_DIR}
             ${PLF_HIVE_INCLUDE_DIRS}
+            ${Stb_INCLUDE_DIR}
     )
 
     target_link_libraries(${TARGET_NAME} PRIVATE
@@ -166,4 +176,12 @@ add_yt_test_executable(YTFixedBlockAllocatorUnitTests
 
 add_yt_test_executable(YTDelegateUnitTests
         tests/Empty.cpp tests/DelegateTests.cpp
+)
+
+add_yt_test_executable(YTDeferredDeleteUnitTests
+        tests/Empty.cpp tests/DeferredDeleteTests.cpp
+)
+
+add_yt_test_executable(YTObjectPoolUnitTests
+        tests/Empty.cpp tests/ObjectPoolTests.cpp
 )

@@ -3,6 +3,7 @@ module;
 #include <memory>
 #include <unordered_map>
 #include <chrono>
+#include <any>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -15,12 +16,27 @@ import :RenderTypes;
 import :WindowResource;
 import :BlockTable;
 import :TransientBuffer;
+import :StagingBuffer;
+import :ImageBuffer;
+import :ImageReference;
 import :ShaderBuilder;
 import :BitAllocator;
+import :ObjectPool;
+import :DeferredDelete;
 import :Delegate;
 
 namespace YT
 {
+    struct PSO
+    {
+        PSOCreateInfo m_CreateInfo;
+        Vector<PSOVariant> m_Variants;
+    };
+
+    using PSOTable = BlockTable<PSO>;
+
+    using ImageTable = BlockTable<ImageBuffer>;
+
     class RenderManager final
     {
     public:
@@ -47,7 +63,7 @@ namespace YT
             const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data,
             const Optional<String> & entry_point = {}) noexcept;
 
-        MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
+        [[nodiscard]] MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
         [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, size_t push_data_size,
             const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept;
 
@@ -61,6 +77,9 @@ namespace YT
 
         [[nodiscard]] MaybeInvalid<Pair<std::byte *, BufferDataHandle>> ReserveBufferSpace(
             BufferTypeId buffer_type_id, uint32_t buffer_size) noexcept;
+
+        [[nodiscard]] MaybeInvalid<ImageReference> CreateImage(const Span<const std::byte>& data) noexcept;
+        void DestroyImage(ImageHandle handle) noexcept;
 
         void RegisterRenderGlobals();
 
@@ -79,9 +98,15 @@ namespace YT
         [[nodiscard]] bool SubmitCommandBuffer(const WindowResource & resource) noexcept;
 
         template <typename Callback>
-        void PushDeletionCallback(Callback && callback)
+        void PushDeferredDeleteCallback(Callback && callback)
         {
             m_FrameResources[m_FrameIndex].m_DeletionCallbacks.emplace_back(std::forward<Callback>(callback));
+        }
+
+        template <typename ObjectType>
+        void PushDeferredDeleteObject(ObjectType && obj)
+        {
+            m_FrameResources[m_FrameIndex].m_DeferredDeletionObjects.emplace_back(std::forward<ObjectType>(obj));
         }
 
     private:
@@ -129,7 +154,8 @@ namespace YT
         vk::UniqueDescriptorSetLayout m_ImageDescriptorSetLayout;
         vk::UniqueDescriptorPool m_ImageDescriptorPool;
         vk::DescriptorSet m_ImageDescriptorSet;
-        BitAllocator m_ImageSlotAllocator;
+
+        ImageTable m_ImageTable;
 
         // Frame resources
         struct FrameResource
@@ -141,11 +167,14 @@ namespace YT
             vk::DescriptorSet m_BufferDescriptorSet;
 
             Vector<Function<void()>> m_DeletionCallbacks;
+            Vector<DeferredDelete> m_DeferredDeletionObjects;
         };
 
         static constexpr int FrameResourceCount = 3;
         std::array<FrameResource, FrameResourceCount> m_FrameResources;
         uint32_t m_FrameIndex = 0;
+
+        ObjectPool<vk::UniqueSemaphore> m_SemaphorePool;
     };
 
 

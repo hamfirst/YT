@@ -69,16 +69,15 @@ namespace YT
         T m_Size;
     };
 
-    export class TransientBuffer
+    class TransientBuffer
     {
     public:
-        TransientBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, size_t size, bool is_staging = false)
+        TransientBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, size_t size)
             : m_Device(device), m_Allocator(allocator), m_AllocationSize(size)
         {
             vk::BufferCreateInfo buffer_create_info;
             buffer_create_info.size = size;
-            buffer_create_info.usage = is_staging ? vk::BufferUsageFlagBits::eTransferSrc :
-                vk::BufferUsageFlagBits::eStorageBuffer;
+            buffer_create_info.usage = vk::BufferUsageFlagBits::eStorageBuffer;
 
             vma::AllocationCreateInfo allocation_create_info;
             allocation_create_info.flags = vma::AllocationCreateFlagBits::eMapped |
@@ -146,16 +145,6 @@ namespace YT
         [[nodiscard]] size_t GetSize() const noexcept
         {
             return m_BufferSize.GetSize();
-        }
-
-        void Transfer(vk::CommandBuffer & command_buffer, vk::Buffer & buffer, size_t offset) noexcept
-        {
-            vk::BufferCopy copy_region;
-            copy_region.size = GetSize();
-            copy_region.srcOffset = 0;
-            copy_region.dstOffset = offset;
-
-            command_buffer.copyBuffer(m_Buffer.get(), buffer, 1, &copy_region);
         }
 
         void End() noexcept

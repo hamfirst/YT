@@ -216,6 +216,9 @@ namespace YT
 
     public:
 
+        static constexpr int BlockSizeValue = BlockSize;
+        static constexpr int BlockCountValue = BlockCount;
+
         BlockTable() = default;
         BlockTable(const BlockTable &) = delete;
         BlockTable(BlockTable &&) = delete;
