@@ -931,10 +931,25 @@ namespace YT
 
             command_buffer->end();
 
+            std::array image_avail_semaphores = { resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get() };
+            std::array render_finish_semaphores = { resource.m_RenderFinishedSemaphores[resource.m_FrameIndex].get() };
+            std::array cmd_buffers = { command_buffer.get() };
+            std::array swap_chains = { resource.m_SwapChain.get() };
+            std::array image_indices = { resource.m_SwapChainImageIndex };
+
+            vk::PipelineStageFlags pipe_stage_flags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+
+            vk::SubmitInfo submit_info;
+            submit_info.setWaitDstStageMask(pipe_stage_flags);
+            submit_info.setCommandBuffers(cmd_buffers);
+            submit_info.setSignalSemaphores(render_finish_semaphores);
+
+            vk::Result result = m_Queue.submit(1, &submit_info,
+                resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
+
+
             PushDeferredDeleteObject(std::move(staging_buffer));
             PushDeferredDeleteObject(std::move(command_buffer));
-
-
         }
         catch (...)
         {
