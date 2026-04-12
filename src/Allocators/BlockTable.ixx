@@ -1,11 +1,17 @@
 module;
 
-#include <atomic>
+//import_std
+
+#include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <random>
 #include <mutex>
+#include <memory>
 #include <optional>
 #include <array>
+#include <bit>
+#include <type_traits>
 
 
 export module YT:BlockTable;
@@ -30,6 +36,8 @@ namespace YT
     {
     public:
 
+        static constexpr std::uint32_t Uint32_Max = std::numeric_limits<std::uint32_t>::max();
+
         BlockTableGenerationRefCount() noexcept = default;
         BlockTableGenerationRefCount(const BlockTableGenerationRefCount &) noexcept = delete;
         BlockTableGenerationRefCount(BlockTableGenerationRefCount &&) noexcept = delete;
@@ -38,35 +46,35 @@ namespace YT
         BlockTableGenerationRefCount &operator=(BlockTableGenerationRefCount &&) noexcept = delete;
         ~BlockTableGenerationRefCount() = default;
 
-        void SetGenerationAndRefCount(uint32_t generation, uint32_t ref_count = 0) noexcept
+        void SetGenerationAndRefCount(std::uint32_t generation, std::uint32_t ref_count = 0) noexcept
         {
-            m_Data.store(static_cast<uint64_t>(ref_count) << 32 | static_cast<uint64_t>(generation), std::memory_order_release);
+            m_Data.store(static_cast<std::uint64_t>(ref_count) << 32 | static_cast<std::uint64_t>(generation), std::memory_order_release);
         }
 
-        [[nodiscard]] bool CheckGeneration(uint32_t generation) const noexcept
+        [[nodiscard]] bool CheckGeneration(std::uint32_t generation) const noexcept
         {
-            return (m_Data.load(std::memory_order_acquire) & UINT32_MAX) == generation;
+            return (m_Data.load(std::memory_order_acquire) & Uint32_Max) == generation;
         }
 
-        [[nodiscard]] uint32_t GetGeneration() const noexcept
+        [[nodiscard]] std::uint32_t GetGeneration() const noexcept
         {
-            return m_Data.load(std::memory_order_acquire) & UINT32_MAX;
+            return m_Data.load(std::memory_order_acquire) & Uint32_Max;
         }
 
-        bool IncRef(uint32_t generation) noexcept
+        bool IncRef(std::uint32_t generation) noexcept
         {
             while (true)
             {
-                uint64_t data = m_Data.load(std::memory_order_acquire);
-                uint64_t cur_gen = (data & UINT32_MAX);
-                uint64_t cur_ref = (data >> 32) & UINT32_MAX;
+                std::uint64_t data = m_Data.load(std::memory_order_acquire);
+                std::uint64_t cur_gen = (data & Uint32_Max);
+                std::uint64_t cur_ref = (data >> 32) & Uint32_Max;
 
                 if (cur_gen != generation)
                 {
                     return false;
                 }
 
-                uint64_t new_data = (cur_ref + 1) << 32 | cur_gen;
+                std::uint64_t new_data = (cur_ref + 1) << 32 | cur_gen;
 
                 if (m_Data.compare_exchange_weak(data, new_data))
                 {
@@ -77,16 +85,16 @@ namespace YT
 
         void IncRefNoValidation() noexcept
         {
-            m_Data.fetch_add(UINT32_MAX + 1, std::memory_order_release);
+            m_Data.fetch_add(Uint32_Max + 1, std::memory_order_release);
         }
 
-        bool DecRef(uint32_t generation, uint32_t & out_ref_count) noexcept
+        bool DecRef(std::uint32_t generation, std::uint32_t & out_ref_count) noexcept
         {
             while (true)
             {
-                uint64_t data = m_Data.load(std::memory_order_acquire);
-                uint64_t cur_gen = (data & UINT32_MAX);
-                uint64_t cur_ref = (data >> 32) & UINT32_MAX;
+                std::uint64_t data = m_Data.load(std::memory_order_acquire);
+                std::uint64_t cur_gen = (data & Uint32_Max);
+                std::uint64_t cur_ref = (data >> 32) & Uint32_Max;
 
                 if (cur_gen != generation)
                 {
@@ -99,7 +107,7 @@ namespace YT
                 }
 
                 cur_ref--;
-                uint64_t new_data = (cur_ref << 32) | cur_gen;
+                std::uint64_t new_data = (cur_ref << 32) | cur_gen;
 
                 if (m_Data.compare_exchange_weak(data, new_data))
                 {
@@ -111,9 +119,9 @@ namespace YT
 
         bool DecRefNoValidation() noexcept
         {
-            uint64_t result = m_Data.fetch_sub(UINT32_MAX + 1, std::memory_order_release);
+            std::uint64_t result = m_Data.fetch_sub(Uint32_Max + 1, std::memory_order_release);
 
-            uint64_t cur_ref = (result >> 32) & UINT32_MAX;
+            std::uint64_t cur_ref = (result >> 32) & Uint32_Max;
             return cur_ref != 0;
         }
 
@@ -138,19 +146,19 @@ namespace YT
         bool operator==(const BlockTableHandle &) const noexcept = default;
         bool operator!=(const BlockTableHandle &) const noexcept = default;
 
-        uint16_t m_BlockIndex = 0;
-        uint16_t m_ElemIndex = 0;
-        uint32_t m_Generation = 0;
+        std::uint16_t m_BlockIndex = 0;
+        std::uint16_t m_ElemIndex = 0;
+        std::uint32_t m_Generation = 0;
     };
 
     export constexpr BlockTableHandle InvalidBlockTableHandle = {};
-    static_assert(sizeof(BlockTableHandle) == sizeof(uint64_t));
+    static_assert(sizeof(BlockTableHandle) == sizeof(std::uint64_t));
 
     export template <typename HandleType>
     constexpr HandleType MakeCustomBlockTableHandle(const BlockTableHandle & handle)
     {
         static_assert(sizeof(HandleType) == sizeof(BlockTableHandle));
-        static_assert(std::is_base_of_v<BlockTableHandle, HandleType>);
+        static_assert(std::is_base_of<BlockTableHandle, HandleType>::value);
 
         return HandleType{ handle };
     }
@@ -187,6 +195,9 @@ namespace YT
     class BlockTable final
     {
     private:
+
+        static constexpr std::uint32_t Uint32_Max = std::numeric_limits<std::uint32_t>::max();
+        static constexpr std::uint64_t Uint64_Max = std::numeric_limits<std::uint64_t>::max();
 
         static_assert(BlockSize % 64 == 0, "BlockSize must be a multiple of 64");
         static_assert(BlockSize > 0, "BlockSize must be greater than 0");
@@ -255,7 +266,7 @@ namespace YT
                     int element_index = 0;
                     for (int word_index = 0; word_index < BlockSize / 64; ++word_index, ++element_index)
                     {
-                        uint64_t word = block->m_BlockAlloc[word_index].load(std::memory_order_acquire);
+                        std::uint64_t word = block->m_BlockAlloc[word_index].load(std::memory_order_acquire);
                         if (word == 0)
                         {
                             element_index += 64;
@@ -464,7 +475,7 @@ namespace YT
                     int element_index = 0;
                     for (int word_index = 0; word_index < BlockSize / 64; ++word_index, ++element_index)
                     {
-                        uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load(std::memory_order_acquire);
+                        std::uint64_t word = m_Blocks[block_index]->m_BlockAlloc[word_index].load(std::memory_order_acquire);
                         if (word == 0)
                         {
                             continue;
@@ -478,9 +489,9 @@ namespace YT
             
                                 visitor(BlockTableHandle
                                 {
-                                    .m_BlockIndex = static_cast<uint16_t>(block_index),
-                                    .m_ElemIndex = static_cast<uint16_t>(element_index),
-                                    .m_Generation = static_cast<uint32_t>(element.m_GenerationRefCount.GetGeneration()),
+                                    .m_BlockIndex = static_cast<std::uint16_t>(block_index),
+                                    .m_ElemIndex = static_cast<std::uint16_t>(element_index),
+                                    .m_Generation = static_cast<std::uint32_t>(element.m_GenerationRefCount.GetGeneration()),
                                 });
                             }
                         }
@@ -497,14 +508,14 @@ namespace YT
 
             while (true)
             {
-                uint64_t current_alloc_bits = alloc_bits.load(std::memory_order_seq_cst);
+                std::uint64_t current_alloc_bits = alloc_bits.load(std::memory_order_seq_cst);
 
                 if (current_alloc_bits & (1ULL << bit_index))
                 {
                     return false;
                 }
 
-                uint64_t new_alloc_bits = current_alloc_bits | (1ULL << bit_index);
+                std::uint64_t new_alloc_bits = current_alloc_bits | (1ULL << bit_index);
                 if (alloc_bits.compare_exchange_weak(current_alloc_bits, new_alloc_bits))
                 {
                     return true;
@@ -519,8 +530,8 @@ namespace YT
 
             while (true)
             {
-                uint64_t current_alloc_bits = alloc_bits.load(std::memory_order_seq_cst);
-                uint64_t new_alloc_bits = current_alloc_bits & ~(1ULL << bit_index);
+                std::uint64_t current_alloc_bits = alloc_bits.load(std::memory_order_seq_cst);
+                std::uint64_t new_alloc_bits = current_alloc_bits & ~(1ULL << bit_index);
 
                 if (alloc_bits.compare_exchange_weak(current_alloc_bits, new_alloc_bits))
                 {
@@ -532,7 +543,7 @@ namespace YT
         template <typename... Args>
         BlockTableHandle AssignSlot(UniquePtr<Block> & block, int block_index, int element_index, Args &&... args) noexcept
         {
-            uint32_t generation = m_NextGeneration.fetch_add(1, std::memory_order_relaxed);
+            std::uint32_t generation = m_NextGeneration.fetch_add(1, std::memory_order_relaxed);
 
             ElementStorage & storage = block->m_BlockData[element_index];
 
@@ -543,8 +554,8 @@ namespace YT
 
             return BlockTableHandle
             {
-                .m_BlockIndex = static_cast<uint16_t>(block_index),
-                .m_ElemIndex = static_cast<uint16_t>(element_index),
+                .m_BlockIndex = static_cast<std::uint16_t>(block_index),
+                .m_ElemIndex = static_cast<std::uint16_t>(element_index),
                 .m_Generation = generation,
             };
         }
@@ -553,9 +564,9 @@ namespace YT
         {
             auto CheckWord = [&](int word) -> Optional<int>
             {
-                uint64_t alloc_bits = block->m_BlockAlloc[word];
+                std::uint64_t alloc_bits = block->m_BlockAlloc[word];
 
-                if (alloc_bits != UINT64_MAX)
+                if (alloc_bits != Uint64_Max)
                 {
                     int bit_index = std::countr_one(alloc_bits);
 
@@ -616,7 +627,7 @@ namespace YT
 
     private:
 
-        std::mutex m_BlockAllocMutex;
+        Mutex m_BlockAllocMutex;
         std::array<UniquePtr<Block>, BlockCount> m_Blocks = { };
         std::atomic_uint32_t m_NextGeneration = 1;
 

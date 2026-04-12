@@ -1,6 +1,13 @@
 module;
 
+//import_std
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <utility>
+#include <limits>
 #include <atomic>
+#include <format>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -30,7 +37,7 @@ namespace YT
 
         void Reset() noexcept
         {
-            if constexpr (std::is_same_v<T, size_t>)
+            if constexpr (std::is_same_v<T, std::size_t>)
             {
                 m_Size = 0;
             }
@@ -40,11 +47,11 @@ namespace YT
             }
         }
 
-        size_t IncreaseSize(size_t size) noexcept
+        std::size_t IncreaseSize(std::size_t size) noexcept
         {
-            if constexpr (std::is_same_v<T, size_t>)
+            if constexpr (std::is_same_v<T, std::size_t>)
             {
-                size_t old_size = m_Size;
+                std::size_t old_size = m_Size;
                 m_Size += size;
                 return old_size;
             }
@@ -54,9 +61,9 @@ namespace YT
             }
         }
 
-        size_t GetSize() const noexcept
+        std::size_t GetSize() const noexcept
         {
-            if constexpr (std::is_same_v<T, size_t>)
+            if constexpr (std::is_same_v<T, std::size_t>)
             {
                 return m_Size;
             }
@@ -72,7 +79,10 @@ namespace YT
     class TransientBuffer
     {
     public:
-        TransientBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, size_t size)
+
+        static constexpr std::uint64_t MaxUINT64 = std::numeric_limits<std::uint64_t>::max();
+
+        TransientBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, std::size_t size)
             : m_Device(device), m_Allocator(allocator), m_AllocationSize(size)
         {
             vk::BufferCreateInfo buffer_create_info;
@@ -103,46 +113,46 @@ namespace YT
             return true;
         }
 
-        uint64_t WriteData(const void * data, size_t size) noexcept
+        std::uint64_t WriteData(const void * data, std::size_t size) noexcept
         {
             if (!m_Ptr)
             {
                 FatalPrint("Buffer is null");
-                return UINT64_MAX;
+                return MaxUINT64;
             }
 
-            uint64_t start = m_BufferSize.IncreaseSize(size);
+            std::uint64_t start = m_BufferSize.IncreaseSize(size);
 
             if (start + size > m_AllocationSize)
             {
                 FatalPrint("Buffer is not big enough");
-                return UINT64_MAX;
+                return MaxUINT64;
             }
 
             memcpy(m_Ptr + start, data, size);
             return start;
         }
 
-        MaybeInvalid<Pair<std::byte *, uint64_t>> ReserveSpace(size_t size) noexcept
+        MaybeInvalid<Pair<std::byte *, std::uint64_t>> ReserveSpace(std::size_t size) noexcept
         {
             if (!m_Ptr)
             {
                 FatalPrint("Buffer is null");
-                return MakePair(nullptr, UINT64_MAX);
+                return MakePair(nullptr, MaxUINT64);
             }
 
-            uint64_t start = m_BufferSize.IncreaseSize(size);
+            std::uint64_t start = m_BufferSize.IncreaseSize(size);
 
             if (start + size > m_AllocationSize)
             {
                 FatalPrint("Buffer is not big enough");
-                return MakePair(nullptr, UINT64_MAX);
+                return MakePair(nullptr, MaxUINT64);
             }
 
             return MakePair(m_Ptr + start, start);
         }
 
-        [[nodiscard]] size_t GetSize() const noexcept
+        [[nodiscard]] std::size_t GetSize() const noexcept
         {
             return m_BufferSize.GetSize();
         }
@@ -158,7 +168,7 @@ namespace YT
             return m_Buffer.get();
         }
 
-        size_t GetAllocationSize() const noexcept
+        std::size_t GetAllocationSize() const noexcept
         {
             return m_AllocationSize;
         }
@@ -167,11 +177,11 @@ namespace YT
 
         vk::UniqueDevice & m_Device;
         vma::UniqueAllocator & m_Allocator;
-        size_t m_AllocationSize;
+        std::size_t m_AllocationSize;
         vma::UniqueBuffer m_Buffer;
         vma::UniqueAllocation m_Allocation;
 
-        using BufferSizeType = std::conditional_t<Threading::NumThreads == 1, TransientBufferSize<size_t>, TransientBufferSize<std::atomic<size_t>>>;
+        using BufferSizeType = std::conditional_t<Threading::NumThreads == 1, TransientBufferSize<std::size_t>, TransientBufferSize<std::atomic<std::size_t>>>;
         BufferSizeType m_BufferSize;
 
         std::byte * m_Ptr = nullptr;

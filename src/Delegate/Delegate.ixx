@@ -1,12 +1,18 @@
 module;
 
+//import_std
+
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <format>
+#include <optional>
 #include <plf_hive.h>
 
 export module YT:Delegate;
 
 import :Types;
+import :Hive;
 
 namespace YT
 {
@@ -22,8 +28,11 @@ namespace YT
      * @tparam ReturnType The return type of the delegate function
      * @tparam Args The argument types of the delegate function
      */
-    export template <typename ReturnType, typename... Args>
-    class Delegate<ReturnType(Args...)>;
+    export
+    {
+        template <typename ReturnType, typename... Args>
+        class Delegate<ReturnType(Args...)>;
+    }
 
     /**
      * @brief A unique identifier generator for delegates.
@@ -37,9 +46,9 @@ namespace YT
          * @brief Generates a new unique ID for a delegate.
          * @return A unique 64-bit identifier.
          */
-        static uint64_t GetNewId() noexcept
+        static std::uint64_t GetNewId() noexcept
         {
-            static uint64_t id = 0;
+            static std::uint64_t id = 0;
             return ++id;
         }
     };
@@ -59,7 +68,7 @@ namespace YT
          * @param element_id Unique ID of the callback
          * @param delegate_id ID of the owning delegate
          */
-        DelegateHandle(void * element_ptr, uint64_t element_id, uint64_t delegate_id)
+        DelegateHandle(void * element_ptr, std::uint64_t element_id, std::uint64_t delegate_id)
             : m_ElementPtr(element_ptr)
             , m_ElementId(element_id)
             , m_DelegateId(delegate_id)
@@ -90,8 +99,8 @@ namespace YT
         friend class Delegate;
 
         void * m_ElementPtr = nullptr;    ///< Pointer to the callback data
-        uint64_t m_ElementId = 0;        ///< Unique ID of the callback
-        uint64_t m_DelegateId = 0;       ///< ID of the owning delegate
+        std::uint64_t m_ElementId = 0;        ///< Unique ID of the callback
+        std::uint64_t m_DelegateId = 0;       ///< ID of the owning delegate
     };
 
     /**
@@ -107,252 +116,255 @@ namespace YT
      * @tparam ReturnType The return type of the delegate function
      * @tparam Args The argument types of the delegate function
      */
-    export template <typename ReturnType, typename... Args>
-    class Delegate<ReturnType(Args...)> final
+    export
     {
-    public:
-        Delegate() noexcept = default;
-        Delegate(const Delegate &) = delete;
-        Delegate(Delegate &&) noexcept = default;
-
-        Delegate & operator=(const Delegate &) = delete;
-        Delegate & operator=(Delegate &&) noexcept = default;
-
-        ~Delegate() noexcept = default;
-
-        /**
-         * @brief Binds a callback with a validity check.
-         * @tparam ValidityCheck Type of the validity check function
-         * @tparam Callback Type of the callback function
-         * @param validity_check Function that returns true if the callback is valid
-         * @param callback The callback function to bind
-         * @return A handle to the bound callback
-         */
-        template <typename ValidityCheck, typename Callback>
-        DelegateHandle BindWithValidityCheck(ValidityCheck && validity_check, Callback && callback) noexcept
+        template <typename ReturnType, typename... Args>
+        class Delegate<ReturnType(Args...)> final
         {
-            if constexpr (std::is_same_v<ReturnType, void>)
+        public:
+            Delegate() noexcept = default;
+            Delegate(const Delegate &) = delete;
+            Delegate(Delegate &&) noexcept = default;
+
+            Delegate & operator=(const Delegate &) = delete;
+            Delegate & operator=(Delegate &&) noexcept = default;
+
+            ~Delegate() noexcept = default;
+
+            /**
+             * @brief Binds a callback with a validity check.
+             * @tparam ValidityCheck Type of the validity check function
+             * @tparam Callback Type of the callback function
+             * @param validity_check Function that returns true if the callback is valid
+             * @param callback The callback function to bind
+             * @return A handle to the bound callback
+             */
+            template <typename ValidityCheck, typename Callback>
+            DelegateHandle BindWithValidityCheck(ValidityCheck && validity_check, Callback && callback) noexcept
             {
-                auto itr = m_Callbacks.insert(
-                    CallbackData
-                    {
-                        .m_ElementId = DelegateId::GetNewId(),
-                        .m_ValidityChecker = validity_check,
-                        .m_Callback = std::forward<Callback>(callback),
-                    });
-
-                return DelegateHandle(&(*itr), itr->m_ElementId, m_Id);
-            }
-            else
-            {
-                CallbackData & new_elem = m_Callbacks.emplace(
-                    CallbackData
-                    {
-                        .m_ElementId = DelegateId::GetNewId(),
-                        .m_ValidityChecker = validity_check,
-                        .m_Callback = std::forward<Callback>(callback),
-                    });
-
-                return DelegateHandle(&new_elem, new_elem.m_ElementId, m_Id);
-            }
-        }
-
-        /**
-         * @brief Binds a callback without validity checking.
-         * @tparam Callback Type of the callback function
-         * @param callback The callback function to bind
-         * @return A handle to the bound callback
-         */
-        template <typename Callback>
-        DelegateHandle BindNoValidityCheck(Callback && callback) noexcept
-        {
-            return BindWithValidityCheck([]{ return true; }, std::forward<Callback>(callback));
-        }
-
-        /**
-         * @brief Binds a callback with a handle-based validity check.
-         * @tparam Handle Type of the handle
-         * @tparam Callback Type of the callback function
-         * @param handle The handle to check for validity
-         * @param callback The callback function to bind
-         * @return A handle to the bound callback
-         */
-        template <typename Handle, typename Callback>
-        DelegateHandle BindWithHandle(Handle && handle, Callback && callback) noexcept
-        {
-            return BindWithValidityCheck([handle]{ return handle; }, std::forward<Callback>(callback));
-        }
-
-        /**
-         * @brief Unbinds a callback using its handle.
-         * @param handle The handle of the callback to unbind
-         */
-        void Unbind(DelegateHandle handle) noexcept
-        {
-            if constexpr (std::is_same_v<ReturnType, void>)
-            {
-                auto itr = m_Callbacks.get_iterator(static_cast<CallbackData *>(handle.m_ElementPtr));
-                if (itr != m_Callbacks.end())
+                if constexpr (std::is_same_v<ReturnType, void>)
                 {
-                    if (handle.m_DelegateId == m_Id && handle.m_ElementId == itr->m_ElementId)
-                    {
-                        m_Callbacks.erase(itr);
-                    }
+                    auto itr = m_Callbacks.insert(
+                        CallbackData
+                        {
+                            .m_ElementId = DelegateId::GetNewId(),
+                            .m_ValidityChecker = validity_check,
+                            .m_Callback = std::forward<Callback>(callback),
+                        });
+
+                    return DelegateHandle(&(*itr), itr->m_ElementId, m_Id);
+                }
+                else
+                {
+                    CallbackData & new_elem = m_Callbacks.emplace(
+                        CallbackData
+                        {
+                            .m_ElementId = DelegateId::GetNewId(),
+                            .m_ValidityChecker = validity_check,
+                            .m_Callback = std::forward<Callback>(callback),
+                        });
+
+                    return DelegateHandle(&new_elem, new_elem.m_ElementId, m_Id);
                 }
             }
-            else
+
+            /**
+             * @brief Binds a callback without validity checking.
+             * @tparam Callback Type of the callback function
+             * @param callback The callback function to bind
+             * @return A handle to the bound callback
+             */
+            template <typename Callback>
+            DelegateHandle BindNoValidityCheck(Callback && callback) noexcept
             {
-                if (!m_Callbacks.has_value())
+                return BindWithValidityCheck([]{ return true; }, std::forward<Callback>(callback));
+            }
+
+            /**
+             * @brief Binds a callback with a handle-based validity check.
+             * @tparam Handle Type of the handle
+             * @tparam Callback Type of the callback function
+             * @param handle The handle to check for validity
+             * @param callback The callback function to bind
+             * @return A handle to the bound callback
+             */
+            template <typename Handle, typename Callback>
+            DelegateHandle BindWithHandle(Handle && handle, Callback && callback) noexcept
+            {
+                return BindWithValidityCheck([handle]{ return handle; }, std::forward<Callback>(callback));
+            }
+
+            /**
+             * @brief Unbinds a callback using its handle.
+             * @param handle The handle of the callback to unbind
+             */
+            void Unbind(DelegateHandle handle) noexcept
+            {
+                if constexpr (std::is_same_v<ReturnType, void>)
                 {
-                    return;
-                }
-
-                CallbackData & data = m_Callbacks.value();
-                if (handle.m_DelegateId == m_Id && handle.m_ElementId == data.m_ElementId)
-                {
-                    m_Callbacks.reset();
-                }
-            }
-        }
-
-        /**
-         * @brief Unbinds all callbacks.
-         */
-        void UnbindAll() noexcept
-        {
-            if constexpr (std::is_same_v<ReturnType, void>)
-            {
-                m_Callbacks.clear();
-            }
-            else
-            {
-                m_Callbacks.reset();
-            }
-        }
-
-        /**
-         * @brief Executes the delegate with a default return value if no callback is bound.
-         * @tparam ReturnTypeOpt The type of the default return value
-         * @param DefaultReturn The default return value
-         * @param args The arguments to pass to the callback
-         * @return The result of the callback or the default value
-         */
-        template <typename ReturnTypeOpt = ReturnType> ReturnType ExecuteWithDefault(
-            ReturnTypeOpt && DefaultReturn, Args &&... args)
-            requires (!std::is_same_v<ReturnType, void> && std::is_convertible_v<ReturnTypeOpt, ReturnType>)
-        {
-            Trim();
-
-            if (!m_Callbacks.has_value())
-            {
-                return DefaultReturn;
-            }
-
-            return m_Callbacks->m_Callback(std::forward<Args>(args)...);
-        }
-
-        /**
-         * @brief Executes the delegate.
-         * @param args The arguments to pass to the callback
-         * @return The result of the callback
-         * @throws Exception if no callback is bound and ReturnType is not default constructible
-         */
-        ReturnType Execute(Args &&... args)
-        {
-            Trim();
-
-            if constexpr (std::is_same_v<ReturnType, void>)
-            {
-                for (CallbackData & callback_data : m_Callbacks)
-                {
-                    if (callback_data.m_ValidityChecker())
+                    auto itr = m_Callbacks.get_iterator(static_cast<CallbackData *>(handle.m_ElementPtr));
+                    if (itr != m_Callbacks.end())
                     {
-                        callback_data.m_Callback(std::forward<Args>(args)...);
+                        if (handle.m_DelegateId == m_Id && handle.m_ElementId == itr->m_ElementId)
+                        {
+                            m_Callbacks.erase(itr);
+                        }
                     }
                 }
-
-                return;
-            }
-            else
-            {
-                if (!m_Callbacks.has_value())
+                else
                 {
-                    if constexpr (std::is_default_constructible_v<ReturnType>)
+                    if (!m_Callbacks.has_value())
                     {
-                        return {};
+                        return;
                     }
-                    else
-                    {
-                        FatalPrint("Callback list is empty and cannot create default return value");
-                        throw Exception("Delegate callback list is empty");
-                    }
-                }
 
-                return m_Callbacks->m_Callback(std::forward<Args>(args)...);
-            }
-        }
-
-        /**
-         * @brief Executes the delegate using the function call operator.
-         * @param args The arguments to pass to the callback
-         * @return The result of the callback
-         */
-        ReturnType operator()(Args && ... args)
-        {
-            return Execute(std::forward<Args>(args)...);
-        }
-
-    private:
-        /**
-         * @brief Removes invalid callbacks from the delegate.
-         * 
-         * For void delegates, removes all callbacks that fail their validity check.
-         * For non-void delegates, removes the callback if it fails its validity check.
-         */
-        void Trim() noexcept
-        {
-            if constexpr (std::is_same_v<ReturnType, void>)
-            {
-                for (auto itr = m_Callbacks.begin(); itr != m_Callbacks.end();)
-                {
-                    CallbackData & callback_data = *itr;
-                    if (!callback_data.m_ValidityChecker())
-                    {
-                        itr = m_Callbacks.erase(itr);
-                    }
-                    else
-                    {
-                        ++itr;
-                    }
-                }
-            }
-            else
-            {
-                if (m_Callbacks.has_value())
-                {
-                    if (!m_Callbacks->m_ValidityChecker())
+                    CallbackData & data = m_Callbacks.value();
+                    if (handle.m_DelegateId == m_Id && handle.m_ElementId == data.m_ElementId)
                     {
                         m_Callbacks.reset();
                     }
                 }
             }
-        }
 
-    private:
-        /**
-         * @brief Data structure for storing callback information.
-         */
-        struct CallbackData
-        {
-            uint64_t m_ElementId = 0;                    ///< Unique ID of the callback
-            std::function<bool()> m_ValidityChecker;     ///< Function to check callback validity
-            std::function<ReturnType(Args...)> m_Callback; ///< The actual callback function
+            /**
+             * @brief Unbinds all callbacks.
+             */
+            void UnbindAll() noexcept
+            {
+                if constexpr (std::is_same_v<ReturnType, void>)
+                {
+                    m_Callbacks.clear();
+                }
+                else
+                {
+                    m_Callbacks.reset();
+                }
+            }
+
+            /**
+             * @brief Executes the delegate with a default return value if no callback is bound.
+             * @tparam ReturnTypeOpt The type of the default return value
+             * @param DefaultReturn The default return value
+             * @param args The arguments to pass to the callback
+             * @return The result of the callback or the default value
+             */
+            template <typename ReturnTypeOpt = ReturnType> ReturnType ExecuteWithDefault(
+                ReturnTypeOpt && DefaultReturn, Args &&... args)
+                requires (!std::is_same_v<ReturnType, void> && std::is_convertible_v<ReturnTypeOpt, ReturnType>)
+            {
+                Trim();
+
+                if (!m_Callbacks.has_value())
+                {
+                    return DefaultReturn;
+                }
+
+                return m_Callbacks->m_Callback(std::forward<Args>(args)...);
+            }
+
+            /**
+             * @brief Executes the delegate.
+             * @param args The arguments to pass to the callback
+             * @return The result of the callback
+             * @throws Exception if no callback is bound and ReturnType is not default constructible
+             */
+            ReturnType Execute(Args &&... args)
+            {
+                Trim();
+
+                if constexpr (std::is_same_v<ReturnType, void>)
+                {
+                    for (CallbackData & callback_data : m_Callbacks)
+                    {
+                        if (callback_data.m_ValidityChecker())
+                        {
+                            callback_data.m_Callback(std::forward<Args>(args)...);
+                        }
+                    }
+
+                    return;
+                }
+                else
+                {
+                    if (!m_Callbacks.has_value())
+                    {
+                        if constexpr (std::is_default_constructible_v<ReturnType>)
+                        {
+                            return {};
+                        }
+                        else
+                        {
+                            FatalPrint("Callback list is empty and cannot create default return value");
+                            throw Exception("Delegate callback list is empty");
+                        }
+                    }
+
+                    return m_Callbacks->m_Callback(std::forward<Args>(args)...);
+                }
+            }
+
+            /**
+             * @brief Executes the delegate using the function call operator.
+             * @param args The arguments to pass to the callback
+             * @return The result of the callback
+             */
+            ReturnType operator()(Args && ... args)
+            {
+                return Execute(std::forward<Args>(args)...);
+            }
+
+        private:
+            /**
+             * @brief Removes invalid callbacks from the delegate.
+             *
+             * For void delegates, removes all callbacks that fail their validity check.
+             * For non-void delegates, removes the callback if it fails its validity check.
+             */
+            void Trim() noexcept
+            {
+                if constexpr (std::is_same_v<ReturnType, void>)
+                {
+                    for (auto itr = m_Callbacks.begin(); itr != m_Callbacks.end();)
+                    {
+                        CallbackData & callback_data = *itr;
+                        if (!callback_data.m_ValidityChecker())
+                        {
+                            itr = m_Callbacks.erase(itr);
+                        }
+                        else
+                        {
+                            ++itr;
+                        }
+                    }
+                }
+                else
+                {
+                    if (m_Callbacks.has_value())
+                    {
+                        if (!m_Callbacks->m_ValidityChecker())
+                        {
+                            m_Callbacks.reset();
+                        }
+                    }
+                }
+            }
+
+        private:
+            /**
+             * @brief Data structure for storing callback information.
+             */
+            struct CallbackData
+            {
+                std::uint64_t m_ElementId = 0;                    ///< Unique ID of the callback
+                std::function<bool()> m_ValidityChecker;     ///< Function to check callback validity
+                std::function<ReturnType(Args...)> m_Callback; ///< The actual callback function
+            };
+
+            std::uint64_t m_Id = DelegateId::GetNewId();          ///< Unique ID of this delegate
+
+            /// Storage for callbacks (hive for void delegates, optional for non-void)
+            std::conditional_t<std::is_same_v<ReturnType, void>,
+                Hive<CallbackData>, Optional<CallbackData>> m_Callbacks;
         };
-
-        uint64_t m_Id = DelegateId::GetNewId();          ///< Unique ID of this delegate
-
-        /// Storage for callbacks (hive for void delegates, optional for non-void)
-        std::conditional_t<std::is_same_v<ReturnType, void>,
-            plf::hive<CallbackData>, std::optional<CallbackData>> m_Callbacks;
-    };
+    }
 } 

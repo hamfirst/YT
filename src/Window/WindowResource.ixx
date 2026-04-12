@@ -1,10 +1,17 @@
 module;
 
-#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
-#include <vulkan/vulkan.hpp>
+//import_std
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+#include <optional>
+#include <functional>
+
 #include <wayland-client.h>
 #include <wayland-xdg-shell-client-protocol.h>
 
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <vulkan/vulkan.hpp>
 
 module YT:WindowResource;
 
@@ -14,14 +21,14 @@ import :Delegate;
 
 namespace YT
 {
-    export struct WindowResource final
+    struct WindowResource final
     {
         wl_surface * m_WaylandSurface = nullptr;
         xdg_surface * m_ShellSurface = nullptr;
         xdg_toplevel * m_Toplevel = nullptr;
         wl_callback * m_Callback = nullptr;
 
-        uint32_t m_SwapChainImageIndex = 0;
+        std::uint32_t m_SwapChainImageIndex = 0;
         int m_FrameIndex = 0;
         vk::UniqueSurfaceKHR m_VkSurface;
         vk::UniqueSwapchainKHR m_SwapChain;

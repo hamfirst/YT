@@ -1,5 +1,11 @@
 module;
 
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+#include <stdexcept>
+#include <type_traits>
+
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
@@ -16,7 +22,7 @@ namespace YT
     {
     public:
         ImageBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, vk::CommandBuffer & command_buffer,
-            StagingBuffer & staging_buffer, uint32_t width, uint32_t height, ImageFormat format) :
+            StagingBuffer & staging_buffer, std::uint32_t width, std::uint32_t height, ImageFormat format) :
             m_Device(device), m_Allocator(allocator), m_Width(width), m_Height(height), m_Format(format)
         {
             vk::ImageCreateInfo image_create_info;
@@ -116,12 +122,12 @@ namespace YT
             return m_ImageView.get();
         }
 
-        [[nodiscard]] uint32_t GetWidth() const noexcept
+        [[nodiscard]] std::uint32_t GetWidth() const noexcept
         {
             return m_Width;
         }
 
-        [[nodiscard]] uint32_t GetHeight() const noexcept
+        [[nodiscard]] std::uint32_t GetHeight() const noexcept
         {
             return m_Height;
         }
@@ -138,8 +144,8 @@ namespace YT
         vk::UniqueImageView m_ImageView;
         vma::UniqueAllocation m_Allocation;
 
-        uint32_t m_Width = 0;
-        uint32_t m_Height = 0;
+        std::uint32_t m_Width = 0;
+        std::uint32_t m_Height = 0;
         ImageFormat m_Format = ImageFormat::R8G8B8A8Unorm;
     };
 }

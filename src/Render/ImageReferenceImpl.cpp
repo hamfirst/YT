@@ -1,8 +1,14 @@
 
 module;
 
-#include <glm/glm.hpp>
+//import_std
 
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <memory>
+
+import glm;
 
 module YT:ImageReferenceImpl;
 
@@ -13,7 +19,7 @@ import :ImageReference;
 
 namespace YT
 {
-    ImageReference::ImageReference(ImageHandle handle, uint32_t width, uint32_t height, uint32_t image_index) noexcept
+    ImageReference::ImageReference(ImageHandle handle, std::uint32_t width, std::uint32_t height, std::uint32_t image_index) noexcept
         : m_Handle(handle)
         , m_Width(width)
         , m_Height(height)
@@ -32,7 +38,7 @@ namespace YT
         rhs.m_Handle = {};
         rhs.m_Width = 0;
         rhs.m_Height = 0;
-        rhs.m_ImageIndex = UINT32_MAX;
+        rhs.m_ImageIndex = std::numeric_limits<std::uint32_t>::max();
     }
 
     ImageReference & ImageReference::operator=(ImageReference && rhs) noexcept
@@ -45,13 +51,13 @@ namespace YT
         rhs.m_Handle = {};
         rhs.m_Width = 0;
         rhs.m_Height = 0;
-        rhs.m_ImageIndex = UINT32_MAX;
+        rhs.m_ImageIndex = std::numeric_limits<std::uint32_t>::max();
         return *this;
     }
 
     ImageReference::~ImageReference() noexcept
     {
-        if (m_ImageIndex != UINT32_MAX)
+        if (m_ImageIndex != std::numeric_limits<std::uint32_t>::max())
         {
             g_RenderManager->DestroyImage(m_Handle);
         }
@@ -62,35 +68,35 @@ namespace YT
         return m_Handle;
     }
 
-    uint32_t ImageReference::GetWidth() const noexcept
+    std::uint32_t ImageReference::GetWidth() const noexcept
     {
         return m_Width;
     }
 
-    uint32_t ImageReference::GetHeight() const noexcept
+    std::uint32_t ImageReference::GetHeight() const noexcept
     {
         return m_Height;
     }
 
-    uint32_t ImageReference::GetImageIndex() const noexcept
+    std::uint32_t ImageReference::GetImageIndex() const noexcept
     {
         return m_ImageIndex;
     }
 
     ImageReference::operator bool() const noexcept
     {
-        return m_ImageIndex != UINT32_MAX;
+        return m_ImageIndex != std::numeric_limits<std::uint32_t>::max();
     }
 
     void ImageReference::Release()
     {
-        if (m_ImageIndex != UINT32_MAX)
+        if (m_ImageIndex != std::numeric_limits<std::uint32_t>::max())
         {
             g_RenderManager->DestroyImage(m_Handle);
             m_Handle = {};
             m_Width = 0;
             m_Height = 0;
-            m_ImageIndex = UINT32_MAX;
+            m_ImageIndex = std::numeric_limits<std::uint32_t>::max();
         }
     }
 }

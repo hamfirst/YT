@@ -1,9 +1,19 @@
 module;
 
+//import_std
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <array>
+#include <atomic>
 #include <memory>
+#include <optional>
+#include <functional>
 #include <unordered_map>
 #include <chrono>
 #include <any>
+#include <mutex>
+#include <type_traits>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -24,6 +34,7 @@ import :BitAllocator;
 import :ObjectPool;
 import :DeferredDelete;
 import :Delegate;
+
 
 namespace YT
 {
@@ -56,27 +67,27 @@ namespace YT
         bool RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept;
         void ReleaseWindowResource(WindowResource & resource) noexcept;
 
-        void RegisterShader(const uint8_t* shader_data, std::size_t shader_data_size) noexcept;
-        void UnregisterShader(const uint8_t* shader_data) noexcept;
+        void RegisterShader(const std::uint8_t* shader_data, std::size_t shader_data_size) noexcept;
+        void UnregisterShader(const std::uint8_t* shader_data) noexcept;
         void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
         [[nodiscard]] bool CompileShader(const StringView & shader_code, ShaderType type,
-            const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data,
+            const StringView & file_name_for_log_output, Vector<std::uint32_t> & out_shader_data,
             const Optional<String> & entry_point = {}) noexcept;
 
         [[nodiscard]] MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
-        [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, size_t push_data_size,
+        [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, std::size_t push_data_size,
             const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept;
 
-        BufferTypeId RegisterBufferType(uint32_t element_size,
-            uint32_t aligned_element_size, size_t buffer_size) noexcept;
+        BufferTypeId RegisterBufferType(std::uint32_t element_size,
+            std::uint32_t aligned_element_size, std::size_t buffer_size) noexcept;
 
         BufferTypeId GetGlobalBufferTypeId() const noexcept;
         BufferTypeId GetIndexBufferTypeId() const noexcept;
 
-        BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, uint32_t data_size) noexcept;
+        BufferDataHandle WriteToBuffer(BufferTypeId buffer_type_id, void * data, std::uint32_t data_size) noexcept;
 
         [[nodiscard]] MaybeInvalid<Pair<std::byte *, BufferDataHandle>> ReserveBufferSpace(
-            BufferTypeId buffer_type_id, uint32_t buffer_size) noexcept;
+            BufferTypeId buffer_type_id, std::uint32_t buffer_size) noexcept;
 
         [[nodiscard]] MaybeInvalid<ImageReference> CreateImage(const Span<const std::byte>& data) noexcept;
         void DestroyImage(ImageHandle handle) noexcept;
@@ -88,7 +99,7 @@ namespace YT
 ;
         [[nodiscard]] bool CreateSwapChainResources(WindowResource & resource) noexcept;
 
-        [[nodiscard]] OptionalPtr<vk::UniqueShaderModule> FindShaderModule(const uint8_t * shader_data) noexcept;
+        [[nodiscard]] OptionalPtr<vk::UniqueShaderModule> FindShaderModule(const std::uint8_t * shader_data) noexcept;
 
         [[nodiscard]] bool UpdateBufferDescriptorSetInfo() noexcept;
         [[nodiscard]] OptionalPtr<PSOVariant> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
@@ -133,7 +144,7 @@ namespace YT
         Delegate<void ()> m_PostRenderDelegate;
 
         // shaders
-        Map<const uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
+        Map<const std::uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
         ShaderBuilder m_ShaderBuilder;
 
         // PSOs
@@ -147,10 +158,10 @@ namespace YT
 
         vk::UniqueDescriptorSetLayout m_BufferDescriptorSetLayout;
         vk::UniqueDescriptorPool m_BufferDescriptorPool;
-        size_t m_BufferDescriptorSetId = 0;
+        std::size_t m_BufferDescriptorSetId = 0;
 
         // Images
-        static constexpr size_t MaxImageDescriptors = 100000;
+        static constexpr std::size_t MaxImageDescriptors = 100000;
         vk::UniqueDescriptorSetLayout m_ImageDescriptorSetLayout;
         vk::UniqueDescriptorPool m_ImageDescriptorPool;
         vk::DescriptorSet m_ImageDescriptorSet;
@@ -172,7 +183,7 @@ namespace YT
 
         static constexpr int FrameResourceCount = 3;
         std::array<FrameResource, FrameResourceCount> m_FrameResources;
-        uint32_t m_FrameIndex = 0;
+        std::uint32_t m_FrameIndex = 0;
 
         ObjectPool<vk::UniqueSemaphore> m_SemaphorePool;
     };

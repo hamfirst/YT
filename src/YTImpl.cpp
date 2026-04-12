@@ -1,7 +1,10 @@
 module;
 
+//import_std
+
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 
 module YT:Impl;
 
@@ -9,7 +12,7 @@ import :RenderManager;
 
 namespace YT
 {
-    void RegisterShader(uint8_t* shader_data, std::size_t shader_data_size) noexcept
+    void RegisterShader(const std::uint8_t* shader_data, std::size_t shader_data_size) noexcept
     {
         g_RenderManager->RegisterShader(shader_data, shader_data_size);
     }

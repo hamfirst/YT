@@ -1,9 +1,16 @@
 module;
 
-#include <glm/glm.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+#include <string>
+#include <optional>
+#include <type_traits>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
+
+import glm;
 
 export module YT:RenderTypes;
 
@@ -21,18 +28,19 @@ namespace YT
     {
         Vertex,
         Fragment,
+        Mesh,
     };
 
     export struct PSOCreateInfo final
     {
         // You must set either vertex or mesh shader
-        OptionalPtr<const uint8_t> m_VertexShader = nullptr;
+        OptionalPtr<const std::uint8_t> m_VertexShader = nullptr;
         StringView m_VertexShaderEntryPoint = "main";
 
-        OptionalPtr<const uint8_t> m_MeshShader = nullptr;
+        OptionalPtr<const std::uint8_t> m_MeshShader = nullptr;
         StringView m_MeshShaderEntryPoint = "main";
 
-        RequiredPtr<const uint8_t> m_FragmentShader = nullptr;
+        RequiredPtr<const std::uint8_t> m_FragmentShader = nullptr;
         StringView m_FragmentShaderEntryPoint = "main";
 
         int m_PushConstantsSize = 0;
@@ -42,7 +50,7 @@ namespace YT
     export struct PSODeferredSettings
     {
         vk::Format m_SurfaceFormat = vk::Format::eUndefined;
-        size_t m_BufferDescriptorSetId = 0;
+        std::size_t m_BufferDescriptorSetId = 0;
 
         bool operator==(const PSODeferredSettings &) const = default;
         bool operator!=(const PSODeferredSettings &) const = default;
@@ -77,75 +85,57 @@ namespace YT
 
     export struct BufferType
     {
-        uint32_t m_ElementSize = 0;
-        uint32_t m_AlignedSize = 0;
-        size_t m_BufferSize = 0;
+        std::uint32_t m_ElementSize = 0;
+        std::uint32_t m_AlignedSize = 0;
+        std::size_t m_BufferSize = 0;
     };
 
     export struct BufferTypeId
     {
-        uint32_t m_BufferTypeIndex = 0;
+        std::uint32_t m_BufferTypeIndex = 0;
     };
 
     export struct BufferDataHandle
     {
-        uint64_t m_Index : 56;
-        uint8_t m_Type : 8;
+        std::uint64_t m_Index : 56;
+        std::uint8_t m_Type : 8;
 
-        operator uint64_t() const noexcept
+        operator std::uint64_t() const noexcept
         {
-            static_assert(sizeof(*this) == sizeof(uint64_t));
-            uint64_t * p_alias = (uint64_t *)(this);
+            static_assert(sizeof(*this) == sizeof(std::uint64_t));
+            std::uint64_t * p_alias = (std::uint64_t *)(this);
             return *p_alias;
         }
-    };
-
-
-    export struct GlobalData
-    {
-        float m_Time = 0.0f;
-        float m_DeltaTime = 0.0f;
-
-        float m_Random1 = 0.0f;
-        float m_Random2 = 0.0f;
-    };
-
-    export struct IndexData
-    {
-        uint32_t m_Index = 0;
     };
 
     export struct QuadRenderTypeId
     {
         int m_QuadRenderTypeIndex = 0;
     };
-
-    export struct QuadData
-    {
-        glm::vec2 m_Start;
-        glm::vec2 m_End;
-
-        glm::vec2 m_StartTX;
-        glm::vec2 m_EndTX;
-
-        glm::vec4 m_Color;
-
-        uint32_t m_Mode = 0;
-        uint32_t m_Flags = 0;
-        uint64_t m_ExtraData = 0;
-    };
-
-    export struct QuadRenderData
-    {
-        int m_QuadIndex = 0;
-        int m_Count = 0;
-    };
-
-    export struct DrawerData
-    {
-        glm::vec2 m_ViewportSize;
-        glm::vec2 m_Offset;
-        glm::vec2 m_Size;
-    };
-
 }
+
+export namespace YT
+{
+    #define vec2 glm::vec2
+    #define vec3 glm::vec3
+    #define vec4 glm::vec4
+
+    #define uint std::uint32_t
+    #define int64_t std::int64_t
+    #define uint64_t std::uint64_t
+
+#include "../shaders/Structs/GlobalData.h"
+#include "../shaders/Structs/IndexData.h"
+#include "../shaders/Structs/QuadData.h"
+#include "../shaders/Structs/QuadRenderData.h"
+#include "../shaders/Structs/DrawerData.h"
+
+    #undef vec2
+    #undef vec3
+    #undef vec4
+
+    #undef uint
+    #undef int64_t
+    #undef uint64_t
+}
+

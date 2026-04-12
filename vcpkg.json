@@ -2,12 +2,18 @@
   "name" : "yt",
   "version-string" : "1.0.0",
   "builtin-baseline" : "d5cb5b9392b89fe9ad25786022415999202277d6",
-  "vcpkg-configuration" : {
-    "overlay-triplets" : [ "./custom-triplets" ]
-  },
   "dependencies" : [ {
     "name" : "freetype",
     "version>=" : "2.13.3"
+  }, {
+    "name" : "vulkan",
+    "version>=" : "2023-12-17"
+  }, {
+    "name" : "vulkan-headers",
+    "version>=" : "1.4.341.0"
+  }, {
+    "name" : "vulkan-loader",
+    "version>=" : "1.4.341.0"
   }, {
     "name" : "glslang",
     "version>=" : "15.1.0"
@@ -17,9 +23,6 @@
   }, {
     "name" : "vulkan-memory-allocator",
     "version>=" : "3.1.0"
-  }, {
-    "name" : "vulkan",
-    "version>=" : "2023-12-17"
   }, {
     "name" : "ecm",
     "version>=" : "6.7.0"

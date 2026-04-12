@@ -1,7 +1,12 @@
 module;
 
-#include <vector>
+//import_std
+
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <vector>
+#include <string>
 
 module YT:QuadRender;
 
@@ -42,9 +47,9 @@ namespace YT
         PSOHandle m_IndexedPSOHandle;
 
         Vector<ShaderData> m_ShaderData;
-        Vector<uint32_t> m_ConsecutiveVertexShaderBinary;
-        Vector<uint32_t> m_IndexedVertexShaderBinary;
-        Vector<uint32_t> m_FragmentShaderBinary;
+        Vector<std::uint32_t> m_ConsecutiveVertexShaderBinary;
+        Vector<std::uint32_t> m_IndexedVertexShaderBinary;
+        Vector<std::uint32_t> m_FragmentShaderBinary;
         bool m_NeedsRecompile = true;
     };
 

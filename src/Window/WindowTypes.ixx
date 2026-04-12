@@ -1,5 +1,6 @@
 module;
 
+//import_std
 #include <cstdint>
 
 export module YT:WindowTypes;
@@ -28,9 +29,9 @@ namespace YT
             return m_GUID != 0;
         }
 
-        static uint64_t ConvertToBits(WindowHandleData handle) noexcept
+        static std::uint64_t ConvertToBits(WindowHandleData handle) noexcept
         {
-            uint64_t * ptr = reinterpret_cast<uint64_t *>(&handle);
+            std::uint64_t * ptr = reinterpret_cast<std::uint64_t *>(&handle);
             return *ptr;
         }
         static void * ConvertToPtr(WindowHandleData handle) noexcept
@@ -39,7 +40,7 @@ namespace YT
             return *ptr;
         }
 
-        static WindowHandleData CreateFromBits(uint64_t bits) noexcept
+        static WindowHandleData CreateFromBits(std::uint64_t bits) noexcept
         {
             WindowHandleData * handle = reinterpret_cast<WindowHandleData*>(&bits);
             return *handle;
@@ -51,10 +52,10 @@ namespace YT
             return *handle;
         }
 
-        uint64_t m_Index : 10;
-        uint64_t m_GUID : 54;
+        std::uint64_t m_Index : 10;
+        std::uint64_t m_GUID : 54;
     };
 
-    static_assert(sizeof(WindowHandleData) == sizeof(uint64_t), "YT::WindowHandle should be 64 bits long");
+    static_assert(sizeof(WindowHandleData) == sizeof(std::uint64_t), "YT::WindowHandle should be 64 bits long");
 
 }

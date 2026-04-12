@@ -1,14 +1,17 @@
 module;
 
+//import_std
+
 #include <cstddef>
 #include <cassert>
 #include <algorithm>
 #include <atomic>
 #include <exception>
 #include <mutex>
-#include <glm/vector_relational.hpp>
+#include <vector>
+#include <format>
 
-export module YT:FixedBlockAllocator;
+module YT:FixedBlockAllocator;
 
 import :Types;
 
@@ -23,7 +26,7 @@ namespace YT
      * 
      * @tparam T The type of objects to allocate. Must be at least as large as std::size_t.
      */
-    export template <typename T>
+    template <typename T>
     class FixedBlockAllocator final
     {
     public:
@@ -116,7 +119,7 @@ namespace YT
         {
             if (m_Head == nullptr)
             {
-                size_t grow_size = m_NextGrowSize;
+                std::size_t grow_size = m_NextGrowSize;
                 if (m_MaxSize != 0)
                 {
                     std::size_t allowable_size = m_MaxSize - m_TotalSize;
@@ -216,7 +219,7 @@ namespace YT
         {
             try
             {
-                std::unique_ptr<Block[]> new_blocks = std::make_unique<Block[]>(grow_size);
+                UniquePtr<Block[]> new_blocks = MakeUnique<Block[]>(grow_size);
                 m_Allocations.push_back({new_blocks.get(), grow_size});
 
                 new_blocks[0].m_Next = m_Head;
@@ -289,7 +292,7 @@ namespace YT
      * 
      * @tparam T The type of objects to allocate. Must be at least as large as std::size_t.
      */
-    export template <typename T>
+    template <typename T>
     class ThreadSafeFixedBlockAllocator
     {
     public:
@@ -436,7 +439,7 @@ namespace YT
 
             try
             {
-                std::unique_ptr<Block[]> new_blocks = std::make_unique<Block[]>(m_NextGrowSize);
+                UniquePtr<Block[]> new_blocks = MakeUnique<Block[]>(m_NextGrowSize);
                 m_Allocations.push_back({new_blocks.get(), m_NextGrowSize});
 
                 for (std::size_t index = 0; index < m_NextGrowSize - 1; ++index)
@@ -522,7 +525,7 @@ namespace YT
      * @tparam InitialAllocationPerThread The initial number of blocks to allocate per thread.
      * @tparam MaxLocalCachePerThread The maximum number of blocks to cache per thread.
      */
-    export template <typename T, size_t InitialAllocationPerThread = 128, size_t MaxLocalCachePerThread = 512>
+    template <typename T, std::size_t InitialAllocationPerThread = 128, std::size_t MaxLocalCachePerThread = 512>
     class ThreadCachedFixedBlockAllocator
     {
     public:
@@ -602,7 +605,7 @@ namespace YT
         {
             std::lock_guard lock(m_FixedAllocatorMutex);
 
-            size_t total_free_size = 0;
+            std::size_t total_free_size = 0;
             for (UniquePtr<FixedBlockAllocator<T>> & allocator : m_FixedAllocators)
             {
                 total_free_size += allocator->GetFreeCount();
@@ -615,7 +618,7 @@ namespace YT
                 return;
             }
 
-            size_t avg_free_size = total_free_size / m_FixedAllocators.size();
+            std::size_t avg_free_size = total_free_size / m_FixedAllocators.size();
 
             for (UniquePtr<FixedBlockAllocator<T>> & allocator : m_FixedAllocators)
             {
@@ -675,6 +678,6 @@ namespace YT
         std::atomic_size_t m_NumAllocations = 0;  ///< Total number of allocations
     };
 
-    template <typename T, size_t InitialAllocationPerThread, size_t MaxLocalCachePerThread>
+    template <typename T, std::size_t InitialAllocationPerThread, std::size_t MaxLocalCachePerThread>
     thread_local FixedBlockAllocator<T> * ThreadCachedFixedBlockAllocator<T, InitialAllocationPerThread, MaxLocalCachePerThread>::m_LocalAllocator = nullptr;
 }

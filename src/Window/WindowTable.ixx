@@ -1,8 +1,12 @@
 module;
 
+//import_std
 #include <cstdint>
 #include <random>
 #include <optional>
+#include <vector>
+#include <functional>
+#include <stdexcept>
 
 module YT:WindowTable;
 
@@ -12,7 +16,7 @@ import :WindowResource;
 
 namespace YT
 {
-    export class WindowTable final
+    class WindowTable final
     {
     public:
 
@@ -22,7 +26,7 @@ namespace YT
             {
                 if(m_Windows[index].m_GUID == 0)
                 {
-                    uint64_t randomness = m_RandomEngine();
+                    std::uint64_t randomness = m_RandomEngine();
 
                     WindowHandleData new_handle = {};
                     new_handle.m_GUID = randomness;
@@ -130,7 +134,7 @@ namespace YT
 
         struct Window
         {
-            uint64_t m_GUID = 0;
+            std::uint64_t m_GUID = 0;
             Optional<WindowResource> m_WindowResource;
         };
 

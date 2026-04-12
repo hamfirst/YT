@@ -1,9 +1,20 @@
+//import_std
+
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <array>
+#include <string>
+#include <format>
+#include <memory>
+#include <vector>
 #include <coroutine>
 #include <atomic>
+#include <mutex>
+#include <type_traits>
+#include <utility>
 
-#include <glm/glm.hpp>
+import glm;
 
 import YT;
 
@@ -11,14 +22,14 @@ using namespace YT;
 
 PSOHandle g_PSOHandle;
 
-uint8_t g_TestTriangle_VS[] =
+std::uint8_t g_TestTriangle_VS[] =
 {
-#embed "../shaders/bin/TestTriangle.spv"
+#embed "shaders/bin/TestTriangle.spv"
 };
 
-uint8_t g_TestFrag_FS[] =
+std::uint8_t g_TestFrag_FS[] =
 {
-#embed "../shaders/bin/TestFrag.spv"
+#embed "shaders/bin/TestFrag.spv"
 };
 
 class TestWidget : public Widget<TestWidget>

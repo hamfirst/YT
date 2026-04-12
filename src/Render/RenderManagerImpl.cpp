@@ -1,38 +1,31 @@
 module;
 
-#include <memory>
-#include <iostream>
-#include <unordered_map>
-#include <any>
+//import_std
 
-#include <glm/glm.hpp>
+#include <memory>
+#include <span>
+#include <array>
+#include <vector>
+#include <unordered_map>
+#include <functional>
+#include <any>
+#include <algorithm>
+#include <mutex>
+#include <atomic>
+#include <chrono>
+#include <ratio>
+#include <iostream>
 
 #include <stb_image.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
-
-VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
-
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
 
+#include "../External/vulkan/VulkanDebug.h"
+
 // Loaded extensions
-PFN_vkCreateDebugUtilsMessengerEXT pfnVkCreateDebugUtilsMessengerEXT;
-PFN_vkDestroyDebugUtilsMessengerEXT pfnVkDestroyDebugUtilsMessengerEXT;
-
-VKAPI_ATTR VkResult VKAPI_CALL vkCreateDebugUtilsMessengerEXT(VkInstance instance,
-                                                              const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
-                                                              const VkAllocationCallbacks* pAllocator,
-                                                              VkDebugUtilsMessengerEXT* pMessenger)
-{
-    return pfnVkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
-}
-
-VKAPI_ATTR void VKAPI_CALL vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger,
-                                                           VkAllocationCallbacks const* pAllocator)
-{
-    return pfnVkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
-}
+import glm;
 
 module YT:RenderManagerImpl;
 
@@ -931,22 +924,17 @@ namespace YT
 
             command_buffer->end();
 
-            std::array image_avail_semaphores = { resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get() };
-            std::array render_finish_semaphores = { resource.m_RenderFinishedSemaphores[resource.m_FrameIndex].get() };
             std::array cmd_buffers = { command_buffer.get() };
-            std::array swap_chains = { resource.m_SwapChain.get() };
-            std::array image_indices = { resource.m_SwapChainImageIndex };
 
             vk::PipelineStageFlags pipe_stage_flags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
             vk::SubmitInfo submit_info;
             submit_info.setWaitDstStageMask(pipe_stage_flags);
             submit_info.setCommandBuffers(cmd_buffers);
-            submit_info.setSignalSemaphores(render_finish_semaphores);
+            //submit_info.setSignalSemaphores(render_finish_semaphores);
 
-            vk::Result result = m_Queue.submit(1, &submit_info,
-                resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
-
+            // vk::Result result = m_Queue.submit(1, &submit_info,
+            //     resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
 
             PushDeferredDeleteObject(std::move(staging_buffer));
             PushDeferredDeleteObject(std::move(command_buffer));
@@ -1386,13 +1374,6 @@ namespace YT
             variant.m_Pipeline = std::move(pipeline_result.value);
 
             auto & result = pso.m_Variants.emplace_back(std::move(variant));
-
-            // auto & result = pso.m_Variants.emplace_back(PSOVariant
-            //     {
-            //         .m_DeferredSettings = deferred_settings,
-            //         .m_Layout = std::move(layout),
-            //         .m_Pipeline = std::move(pipeline_result.value),
-            //     });
             return &result;
         }
         catch (vk::SystemError& err)

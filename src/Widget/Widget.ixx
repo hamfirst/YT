@@ -1,10 +1,13 @@
 module;
 
+//import_std
+
 #include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <concepts>
 #include <format>
+#include <type_traits>
 
 export module YT:Widget;
 
@@ -300,13 +303,13 @@ namespace YT
         template <typename CastWidgetClass>
         friend class WidgetHandle;
 
-        template <typename MyWidgetClass, typename InitDataType = WidgetBaseInitData, typename ParentWidgetClass = WidgetBase>
+        template <typename MyWidgetClass, typename InitDataType, typename ParentWidgetClass>
         friend class Widget;
 
         WidgetStorageBase * m_Storage = nullptr;
         WidgetClass * m_Widget = nullptr;
         WidgetDeleter m_Deleter = nullptr;
-        uint32_t m_Generation = 0;
+        std::uint32_t m_Generation = 0;
     };
 
     export struct WidgetBaseInitData
@@ -335,7 +338,7 @@ namespace YT
         virtual void VisitChildren(Function<void(const WidgetBase&)> & callback) { }
     };
 
-    template <typename MyWidgetClass, typename InitDataType = WidgetBaseInitData, typename ParentWidgetClass = WidgetBase>
+    template <typename MyWidgetClass, typename InitDataType, typename ParentWidgetClass>
     class Widget : public ParentWidgetClass
     {
     public:
@@ -356,7 +359,7 @@ namespace YT
             return s_WidgetStorage;
         }
 
-        void * operator new (size_t size) noexcept
+        void * operator new (std::size_t size) noexcept
         {
             if (size != sizeof(MyWidgetClass))
             {

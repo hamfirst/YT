@@ -1,5 +1,9 @@
 module;
 
+//import_std
+
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <chrono>
 
@@ -63,11 +67,11 @@ namespace YT
 
         static void HandleFrameCallback(void *data, struct wl_callback *cb, uint32_t time) noexcept;
 
-        static void HandleShellPing(void * data, struct xdg_wm_base * shell, uint32_t serial) noexcept;
-        static void HandleShellSurfaceConfigure(void * data, struct xdg_surface * shellSurface, uint32_t serial) noexcept;
+        static void HandleShellPing(void * data, struct xdg_wm_base * shell, std::uint32_t serial) noexcept;
+        static void HandleShellSurfaceConfigure(void * data, struct xdg_surface * shellSurface, std::uint32_t serial) noexcept;
 
         static void HandleToplevelConfigure(void * data, struct xdg_toplevel * toplevel,
-                                            int32_t width, int32_t height, struct wl_array * states) noexcept;
+                                            std::int32_t width, std::int32_t height, struct wl_array * states) noexcept;
         static void HandleToplevelClose(void * data, struct xdg_toplevel * toplevel) noexcept;
 
 

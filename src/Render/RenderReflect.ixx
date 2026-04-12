@@ -1,9 +1,14 @@
 module;
 
+//import_std
+#include <cassert>
 #include <format>
-#include <experimental/meta>
 
-#include <glm/glm.hpp>
+#ifdef COMPILE_REFLECTION
+//#include <meta>
+#endif
+
+import glm;
 
 export module YT:RenderReflect;
 
@@ -12,33 +17,69 @@ import :RenderTypes;
 
 namespace YT
 {
-    // start 'expand' definition
-    namespace __impl {
-        template<auto... vals>
-        struct replicator_type {
-            template<typename F>
-              constexpr void operator>>(F body) const {
-                (body.template operator()<vals>(), ...);
-            }
-        };
+    // // start 'expand' definition
+    // namespace __impl {
+    //     template<auto... vals>
+    //     struct replicator_type {
+    //         template<typename F>
+    //           constexpr void operator>>(F body) const {
+    //             (body.template operator()<vals>(), ...);
+    //         }
+    //     };
+    //
+    //     template<auto... vals>
+    //     replicator_type<vals...> replicator = {};
+    // }
+    //
+    // template<typename R>
+    // consteval auto expand(R range) {
+    //     std::vector<std::meta::info> args;
+    //     for (auto r : range) {
+    //         args.push_back(std::meta::reflect_value(r));
+    //     }
+    //     return substitute(^^__impl::replicator, args);
+    // }
+    // // end 'expand' definition
 
-        template<auto... vals>
-        replicator_type<vals...> replicator = {};
-    }
-
-    template<typename R>
-    consteval auto expand(R range) {
-        std::vector<std::meta::info> args;
-        for (auto r : range) {
-            args.push_back(std::meta::reflect_value(r));
+#ifndef COMPILE_REFLECTION
+    template <typename T>
+    String GetClassName()
+    {
+        String class_name;
+        if constexpr(std::is_same_v<T, GlobalData>)
+        {
+            class_name = "GlobalData";
         }
-        return substitute(^^__impl::replicator, args);
+
+        if constexpr(std::is_same_v<T, IndexData>)
+        {
+            class_name = "IndexData";
+        }
+
+        if constexpr(std::is_same_v<T, QuadData>)
+        {
+            class_name = "QuadData";
+        }
+
+        if constexpr(std::is_same_v<T, QuadRenderData>)
+        {
+            class_name = "QuadRenderData";
+        }
+
+        if constexpr(std::is_same_v<T, DrawerData>)
+        {
+            class_name = "DrawerData";
+        }
+
+        assert(!class_name.empty());
+        return class_name;
     }
-    // end 'expand' definition
+#endif
 
     export template <typename T>
     constexpr String GetShaderStructDef() noexcept
     {
+#ifdef COMPILE_REFLECTION
         constexpr auto class_info = ^^T;
         constexpr auto class_name = std::meta::identifier_of(class_info);
 
@@ -46,7 +87,7 @@ namespace YT
         str.append(class_name);
         str.append("\n{");
 
-        [: expand(nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())) :] >> [&]<auto dm>
+        template for (constexpr auto dm : std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()))
         {
             str.append("\n\t");
 
@@ -54,19 +95,19 @@ namespace YT
             {
                 str.append("bool");
             }
-            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^uint32_t))
+            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^unsigned int))
             {
                 str.append("uint");
             }
-            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^int32_t))
+            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^signed int))
             {
                 str.append("int");
             }
-            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^uint64_t))
+            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^unsigned long long))
             {
                 str.append("uint64_t");
             }
-            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^int64_t))
+            else if constexpr (std::meta::dealias(std::meta::type_of(dm)) == std::meta::dealias(^^signed long long))
             {
                 str.append("int64_t");
             }
@@ -168,15 +209,57 @@ namespace YT
         };
 
         str.append("\n};\n");
+#else
 
+        if constexpr(std::is_same_v<T, GlobalData>)
+        {
+            return {
+                #embed "../../shaders/Structs/GlobalData.h"
+            };
+        }
+
+        if constexpr(std::is_same_v<T, IndexData>)
+        {
+            return {
+                #embed "../../shaders/Structs/IndexData.h"
+            };
+        }
+
+        if constexpr(std::is_same_v<T, QuadData>)
+        {
+            return {
+                #embed "../../shaders/Structs/QuadData.h"
+            };
+        }
+
+        if constexpr(std::is_same_v<T, QuadRenderData>)
+        {
+            return {
+                #embed "../../shaders/Structs/QuadRenderData.h"
+            };
+        }
+
+        if constexpr(std::is_same_v<T, DrawerData>)
+        {
+            return {
+                #embed "../../shaders/Structs/DrawerData.h"
+            };
+        }
+
+        assert(false);
+        String str;
         return str;
+#endif
     }
 
     export template <typename T>
     String GetShaderBufferDef(int set, int binding) noexcept
     {
+#ifdef COMPILE_REFLECTION
         StringView class_name = std::meta::identifier_of(^^T);
-
+#else
+        String class_name = GetClassName<T>();
+#endif
         return std::format(
             "layout(std430, set = {}, binding = {}) readonly buffer {}BufferType\n"
             "{{\n"
@@ -199,20 +282,29 @@ namespace YT
             set, binding, class_name, class_name, class_name, class_name, class_name, binding, class_name, class_name);
     }
 
-    BufferTypeId RegisterShaderStruct(size_t struct_size, size_t struct_aligned_size, size_t max_elements_per_frame) noexcept;
+    BufferTypeId RegisterShaderStruct(std::size_t struct_size, std::size_t struct_aligned_size, std::size_t max_elements_per_frame) noexcept;
     void RegisterShaderInclude(const StringView & struct_name, const StringView & shader_code) noexcept;
 
     export template <typename T>
     void RegisterShaderType() noexcept
     {
+#ifdef COMPILE_REFLECTION
         StringView class_name = std::meta::identifier_of(^^T);
         RegisterShaderInclude(class_name, GetShaderStructDef<T>());
+#else
+        String class_name = GetClassName<T>();
+        RegisterShaderInclude(class_name, GetShaderStructDef<T>());
+#endif
     }
 
     export template <typename T>
-    BufferTypeId RegisterShaderBufferStruct(size_t max_elements_per_frame, int descriptor_set = 0) noexcept
+    BufferTypeId RegisterShaderBufferStruct(std::size_t max_elements_per_frame, int descriptor_set = 0) noexcept
     {
+#ifdef COMPILE_REFLECTION
         StringView class_name = std::meta::identifier_of(^^T);
+#else
+        String class_name = GetClassName<T>();
+#endif
         BufferTypeId type_id = RegisterShaderStruct(sizeof(T), sizeof(T), max_elements_per_frame);
 
         String shader_code = GetShaderStructDef<T>() +
@@ -222,6 +314,4 @@ namespace YT
 
         return type_id;
     }
-
-
 }

@@ -1,5 +1,12 @@
 module;
 
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <utility>
+#include <type_traits>
+#include <stdexcept>
+
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan-memory-allocator-hpp/vk_mem_alloc.hpp>
@@ -13,7 +20,7 @@ namespace YT
     class StagingBuffer
     {
     public:
-        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, const void * data, size_t size)
+        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, const void * data, std::size_t size)
             : m_Device(device), m_Allocator(allocator), m_AllocationSize(size)
         {
             vk::BufferCreateInfo buffer_create_info;
@@ -54,12 +61,12 @@ namespace YT
             return m_Buffer.get();
         }
 
-        size_t GetAllocationSize() const noexcept
+        std::size_t GetAllocationSize() const noexcept
         {
             return m_AllocationSize;
         }
 
-        void Transfer(vk::CommandBuffer & command_buffer, vk::Buffer & target_buffer, size_t offset) noexcept
+        void Transfer(vk::CommandBuffer & command_buffer, vk::Buffer & target_buffer, std::size_t offset) noexcept
         {
             vk::BufferCopy copy_region;
             copy_region.size = m_AllocationSize;
@@ -69,7 +76,7 @@ namespace YT
             command_buffer.copyBuffer(m_Buffer.get(), target_buffer, 1, &copy_region);
         }
 
-        void Transfer(vk::CommandBuffer & command_buffer, vk::Image & target_image, uint32_t width, uint32_t height)
+        void Transfer(vk::CommandBuffer & command_buffer, vk::Image & target_image, std::uint32_t width, std::uint32_t height)
         {
             // Specify the buffer to image copy operation
             vk::BufferImageCopy region = {};
@@ -101,6 +108,6 @@ namespace YT
         vma::UniqueAllocator & m_Allocator;
         vma::UniqueBuffer m_Buffer;
         vma::UniqueAllocation m_Allocation;
-        size_t m_AllocationSize;
+        std::size_t m_AllocationSize;
     };
 }

@@ -1,15 +1,17 @@
-cmake_minimum_required(VERSION 3.29)
-
-set(VCPKG_TARGET_TRIPLET x64-linux-libcpp)
-set(VCPKG_HOST_TRIPLET x64-linux-libcpp)
-
-project(YT)
+cmake_minimum_required(VERSION 4.3.1)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "-stdlib=libc++ -freflection-latest")
-set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++")
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+#set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
+#set(CMAKE_CXX_MODULE_STD ON)
+set(CMAKE_CXX_FLAGS "-fmodules") #-Wno-interference-size  -freflection -fexpansion-statements
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
+
+project(YT LANGUAGES C CXX)
+
+find_package(Threads)
 
 find_package(Vulkan)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
@@ -34,8 +36,9 @@ find_package(GTest CONFIG REQUIRED)
 
 set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
-        src/Render/VMA.cpp
-        src/Render/STBI.cpp
+        src/External/stb/STBI.cpp
+        src/External/vulkan/Vulkan.cpp
+        src/External/vma/VMA.cpp
 )
 
 set(YT_MODULE_SOURCES
@@ -85,6 +88,12 @@ set(YT_MODULE_SOURCES
         src/YTImpl.cpp
 )
 
+set(YT_EXTERNAL_MODULE_SOURCES
+        src/External/hive/Hive.ixx
+        src/External/glm/GLM.ixx
+        src/External/glslang/GLSLang.ixx
+)
+
 set(YT_LINK_LIBRARIES
         wayland-client
         vulkan
@@ -98,7 +107,7 @@ set(YT_LINK_LIBRARIES
 function(add_yt_executable TARGET_NAME SOURCES)
 
     add_executable(${TARGET_NAME} ${SOURCES} ${YT_CPP_SOURCES})
-    target_sources(${TARGET_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${YT_MODULE_SOURCES})
+    target_sources(${TARGET_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${YT_MODULE_SOURCES} ${YT_EXTERNAL_MODULE_SOURCES})
 
     ecm_add_wayland_client_protocol(${TARGET_NAME}
             PROTOCOL ${WaylandProtocols_DATADIR}/stable/xdg-shell/xdg-shell.xml
@@ -107,6 +116,7 @@ function(add_yt_executable TARGET_NAME SOURCES)
 
     target_include_directories(${TARGET_NAME} PRIVATE
             ${CMAKE_CURRENT_BINARY_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/External/wayland
             ${PLF_HIVE_INCLUDE_DIRS}
             ${Stb_INCLUDE_DIR}
     )
@@ -115,11 +125,9 @@ function(add_yt_executable TARGET_NAME SOURCES)
             ${YT_LINK_LIBRARIES}
     )
 
-    target_compile_options(${TARGET_NAME} PRIVATE
-            -Wno-c23-extensions
-            -Wno-invalid-offsetof
-            -Wno-nullability-completeness
-    )
+    get_target_property(MY_SOURCES ${TARGET_NAME} SOURCES)
+    message(STATUS "Source files for ${TARGET_NAME}: ${MY_SOURCES}")
+
 endfunction()
 
 function(add_yt_test_executable TARGET_NAME SOURCES MODULES)

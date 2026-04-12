@@ -1,5 +1,7 @@
 module;
 
+//import_std
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -7,6 +9,7 @@ module;
 export module YT;
 
 export import :Types;
+export import :BlockTable;
 export import :Init;
 export import :Delegate;
 export import :Window;
@@ -26,10 +29,10 @@ namespace YT
         return WindowRef(init_info);
     }
 
-    export void RegisterShader(uint8_t* shader_data, std::size_t shader_data_size) noexcept;
+    export void RegisterShader(const std::uint8_t* shader_data, std::size_t shader_data_size) noexcept;
 
-    export template <int ArraySize>
-    void RegisterShader(uint8_t (&shader_data)[ArraySize]) noexcept
+    export template <std::size_t ArraySize>
+    void RegisterShader(std::uint8_t (&shader_data)[ArraySize]) noexcept
     {
         RegisterShader(shader_data, ArraySize);
     }

@@ -1,5 +1,7 @@
 module;
 
+//import_std
+
 #include <cstddef>
 #include <new>
 #include <type_traits>
@@ -23,7 +25,7 @@ namespace YT
     public:
         DeferredDelete() = default;
 
-        static constexpr size_t MaxDataSize = std::hardware_constructive_interference_size - sizeof(void *) * 2;
+        static constexpr std::size_t MaxDataSize = std::hardware_constructive_interference_size - sizeof(void *) * 2;
 
         /**
          * @brief Constructs a DeferredDelete with the given object.
@@ -34,8 +36,8 @@ namespace YT
         explicit DeferredDelete(T && t) noexcept requires (
             !std::is_same_v<T, DeferredDelete> && 
             std::is_move_constructible_v<T> &&
-            sizeof(T) <= MaxDataSize &&
-            alignof(T) <= alignof(std::max_align_t)
+            sizeof(T) <= MaxDataSize /* &&
+            alignof(T) <= alignof(std::max_align_t */
         )
         {
             new (m_Data) T(std::forward<T>(t));

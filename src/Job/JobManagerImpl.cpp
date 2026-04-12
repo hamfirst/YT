@@ -1,19 +1,25 @@
 
 module;
 
+//import_std
+
 #include <cassert>
+#include <memory>
+#include <array>
+#include <vector>
 #include <thread>
 #include <mutex>
 #include <semaphore>
 #include <coroutine>
 
-thread_local int g_ThreadID = -1;
-thread_local int g_NextJobID = 0;
-
 module YT:JobManagerImpl;
 
 import :Types;
 import :JobManager;
+
+
+thread_local int g_ThreadID = -1;
+thread_local int g_NextJobID = 0;
 
 namespace YT
 {
@@ -36,7 +42,6 @@ namespace YT
     }
 
     JobManager::JobManager()
-                : m_RunningSemaphore{0}
     {
         g_ThreadID = 0;
         g_NextJobID = 0;

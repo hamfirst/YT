@@ -1,13 +1,22 @@
 module;
 
+//import_std
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <coroutine>
 #include <new>
+#include <memory>
+#include <type_traits>
+#include <vector>
+#include <array>
 #include <functional>
 #include <semaphore>
 #include <atomic>
 #include <mutex>
 #include <thread>
-#include <cassert>
+#include <format>
 
 export module YT:JobManager;
 
@@ -148,17 +157,19 @@ namespace YT
         void JobMain(int thread_id) noexcept;
 
     private:
+        static constexpr std::size_t CacheLineSize = 64;//std::hardware_destructive_interference_size;
+
         /// Structure for storing a single job in a thread's queue padded to avoid false sharing
         struct JobBlock
         {
-            std::atomic<std::coroutine_handle<>> m_Handle = std::coroutine_handle<>(nullptr);
-            std::byte m_Pad[std::hardware_destructive_interference_size - sizeof(m_Handle)] = {};
+            std::atomic<std::coroutine_handle<>> m_Handle;
+            std::byte m_Pad[CacheLineSize - sizeof(m_Handle)];
         };
 
         std::atomic_bool m_Quit = false;                    ///< Flag to signal thread termination
         std::atomic_bool m_Running = false;                 ///< Flag indicating if jobs are being processed
 
-        std::counting_semaphore<NumThreads> m_RunningSemaphore;  ///< Semaphore for thread synchronization
+        std::counting_semaphore<NumThreads> m_RunningSemaphore{0};  ///< Semaphore for thread synchronization
 
         std::vector<std::thread> m_Threads;                 ///< Worker thread handles
 
@@ -168,7 +179,7 @@ namespace YT
         JobBlock m_Blocks[NumThreads][NumThreads];          ///< Job queues for each thread
     };
 
-    static constexpr size_t MaxJobAllocSize = 128;  ///< Maximum size of a job allocation
+    static constexpr std::size_t MaxJobAllocSize = 128;  ///< Maximum size of a job allocation
     export ThreadCachedFixedBlockAllocator<std::uint64_t[MaxJobAllocSize / 8], 4096, 65536> g_JobManagerAllocator;  ///< Allocator for coroutine frames
 
     /// Global JobManager instance
@@ -205,7 +216,7 @@ namespace YT
         std::suspend_always initial_suspend() noexcept { return {}; }
         std::suspend_always final_suspend() noexcept { return {}; }
 
-        static void * operator new(size_t size) noexcept
+        static void * operator new(std::size_t size) noexcept
         {
             if (size > MaxJobAllocSize)
             {
@@ -232,7 +243,7 @@ namespace YT
     /**
      * @brief Promise type specialization for void-returning jobs.
      */
-    export template <>
+    template <>
     struct JobPromiseType<void> : public JobPromiseBaseData
     {
         JobPromiseType()
@@ -249,7 +260,7 @@ namespace YT
         std::suspend_always final_suspend() noexcept { return {}; }
 
 
-        static void * operator new(size_t size) noexcept
+        static void * operator new(std::size_t size) noexcept
         {
             if (size > MaxJobAllocSize)
             {

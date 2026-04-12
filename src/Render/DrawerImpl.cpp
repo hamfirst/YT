@@ -1,10 +1,18 @@
 
 module;
 
-#include <glm/glm.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <optional>
+#include <vector>
+#include <utility>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
+
+import glm;
 
 module YT:DrawerImpl;
 
@@ -24,7 +32,7 @@ namespace YT
 
     }
 
-    void Drawer::DrawRaw(PSOHandle pso_handle, uint32_t num_verts) noexcept
+    void Drawer::DrawRaw(PSOHandle pso_handle, std::uint32_t num_verts) noexcept
     {
         FlushIfNeeded(DrawType::None);
 
@@ -50,7 +58,7 @@ namespace YT
 
         m_DrawCount++;
 
-        uint32_t index = static_cast<uint32_t>(data_handle.m_Index);
+        std::uint32_t index = static_cast<std::uint32_t>(data_handle.m_Index);
         if (!m_FirstDrawElemIndex.has_value())
         {
             m_FirstDrawElemIndex = index;
@@ -83,7 +91,7 @@ namespace YT
         {
             if (m_DrawType == DrawType::Quad)
             {
-                if constexpr (Threading::NumThreads > 1 && !m_ConsecutiveDraws)
+                if (Threading::NumThreads > 1 && !m_ConsecutiveDraws)
                 {
                     auto [ptr, handle] =
                         g_RenderManager->ReserveBufferSpace(g_RenderManager->GetIndexBufferTypeId(), m_DrawElemIndexData.size());

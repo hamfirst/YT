@@ -1,7 +1,16 @@
 module;
 
-#include <vector>
+//import_std
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <vector>
+#include <string>
+#include <format>
+#include <functional>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 module YT:QuadRenderImpl;
 
@@ -14,22 +23,22 @@ namespace YT
 {
     constexpr char g_Quad_VS[] =
     {
-#embed "../shaders/Quad/Quad.qvert"
+#embed "../../shaders/Quad/Quad.qvert"
     };
 
     constexpr char g_QuadHeader_FS[] =
     {
-#embed "../shaders/Quad/Header.qfrag"
+#embed "../../shaders/Quad/Header.qfrag"
     };
 
     constexpr char g_QuadMain_FS[] =
     {
-#embed "../shaders/Quad/Main.qfrag"
+#embed "../../shaders/Quad/Main.qfrag"
     };
 
     constexpr char g_QuadFooter_FS[] =
     {
-#embed "../shaders/Quad/Footer.qfrag"
+#embed "../../shaders/Quad/Footer.qfrag"
     };
 
     bool QuadRender::CreateQuadRender(const ApplicationInitInfo & init_info) noexcept
@@ -69,10 +78,10 @@ namespace YT
             throw Exception("Failed to compile indexed quad vertex shader code");
         }
 
-        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_ConsecutiveVertexShaderBinary.data()),
+        g_RenderManager->RegisterShader(reinterpret_cast<std::uint8_t *>(m_ConsecutiveVertexShaderBinary.data()),
             m_ConsecutiveVertexShaderBinary.size() * sizeof(m_ConsecutiveVertexShaderBinary[0]));
 
-        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_IndexedVertexShaderBinary.data()),
+        g_RenderManager->RegisterShader(reinterpret_cast<std::uint8_t *>(m_IndexedVertexShaderBinary.data()),
             m_IndexedVertexShaderBinary.size() * sizeof(m_IndexedVertexShaderBinary[0]));
 
         g_RenderManager->GetPreRenderDelegate().BindNoValidityCheck([this]() { UpdateShader(); });
@@ -117,13 +126,13 @@ namespace YT
             if (Recompile())
             {
                 PSOCreateInfo pso_info;
-                pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_ConsecutiveVertexShaderBinary.data());
+                pso_info.m_VertexShader = reinterpret_cast<std::uint8_t *>(m_ConsecutiveVertexShaderBinary.data());
                 pso_info.m_VertexShaderEntryPoint = "mainConsecutive";
-                pso_info.m_FragmentShader = reinterpret_cast<uint8_t *>(m_FragmentShaderBinary.data());
+                pso_info.m_FragmentShader = reinterpret_cast<std::uint8_t *>(m_FragmentShaderBinary.data());
                 pso_info.m_PushConstantsSize = sizeof(QuadRenderData);
                 m_ConsecutivePSOHandle = g_RenderManager->RegisterPSO(pso_info);
 
-                pso_info.m_VertexShader = reinterpret_cast<uint8_t *>(m_IndexedVertexShaderBinary.data());
+                pso_info.m_VertexShader = reinterpret_cast<std::uint8_t *>(m_IndexedVertexShaderBinary.data());
                 pso_info.m_VertexShaderEntryPoint = "mainIndexed";
                 m_IndexedPSOHandle = g_RenderManager->RegisterPSO(pso_info);
             }
@@ -146,7 +155,7 @@ namespace YT
 
         shader += main;
 
-        uint32_t quad_shader_id = 0;
+        std::uint32_t quad_shader_id = 0;
         for (const ShaderData & shader_data : m_ShaderData)
         {
             shader += Format("case {}: o_color = {}(global_data, quad_data); return;\n",
@@ -158,7 +167,7 @@ namespace YT
 
         if (!m_ShaderData.empty())
         {
-            g_RenderManager->UnregisterShader(reinterpret_cast<uint8_t*>(m_FragmentShaderBinary.data()));
+            g_RenderManager->UnregisterShader(reinterpret_cast<std::uint8_t*>(m_FragmentShaderBinary.data()));
         }
 
         m_FragmentShaderBinary.clear();
@@ -169,7 +178,7 @@ namespace YT
             return false;
         }
 
-        g_RenderManager->RegisterShader(reinterpret_cast<uint8_t *>(m_FragmentShaderBinary.data()),
+        g_RenderManager->RegisterShader(reinterpret_cast<std::uint8_t *>(m_FragmentShaderBinary.data()),
             m_FragmentShaderBinary.size() * sizeof(m_FragmentShaderBinary[0]));
         return true;
     }

@@ -1,9 +1,13 @@
 module;
 
+//import_std
+
+#include <vector>
 #include <cassert>
 #include <cstdint>
 #include <cstddef>
 #include <algorithm>
+
 
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -130,6 +134,6 @@ namespace YT
 
     private:
         std::size_t m_LowestFreeWordGuess = 0;  ///< Optimizes allocation by tracking the lowest word with free bits
-        Vector<int64_t> m_Bits;                 ///< Bit array where each bit represents an allocatable resource
+        Vector<std::int64_t> m_Bits;                 ///< Bit array where each bit represents an allocatable resource
     };
 }

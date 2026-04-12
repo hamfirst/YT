@@ -1,5 +1,9 @@
 module;
 
+//import_std
+
+#include <cstdint>
+#include <cstddef>
 #include <vector>
 #include <string>
 #include <memory>
@@ -15,6 +19,7 @@ module;
 #include <stdexcept>
 #include <span>
 
+
 export module YT:Types;
 
 namespace YT
@@ -23,7 +28,7 @@ namespace YT
     export class Threading
     {
     public:
-        static constexpr int NumThreads = 1;
+        static constexpr std::size_t NumThreads = 1;
     };
 
     export template<typename T>
@@ -76,7 +81,9 @@ namespace YT
 
     export using Mutex = std::mutex;
     export using Thread = std::thread;
-    export using Semaphore = std::counting_semaphore<INT_MAX>;
+
+    constexpr int MaxInt = std::numeric_limits<int>::max();
+    export using Semaphore = std::counting_semaphore<MaxInt>;
 
     export template<typename... Args>
     String Format(std::format_string<Args...> format, Args&&... args)
@@ -106,14 +113,14 @@ namespace YT
     void FatalPrint(std::format_string<Args...> format, Args&&... args)
     {
         std::println(format, std::forward<Args>(args)...);
-        __builtin_debugtrap();
+        //__builtin_debugtrap();
     }
 
     export bool WarnCheck(bool condition) noexcept
     {
         if(!condition)
         {
-            __builtin_debugtrap();
+            //__builtin_debugtrap();
         }
 
         return condition;
@@ -133,8 +140,8 @@ namespace YT
     export struct WindowInitInfo final
     {
         String m_WindowName = "YTWindow";
-        uint32_t m_Width = 800;
-        uint32_t m_Height = 600;
+        std::uint32_t m_Width = 800;
+        std::uint32_t m_Height = 600;
 
         bool m_Fullscreen = false;
         bool m_Resizable = false;

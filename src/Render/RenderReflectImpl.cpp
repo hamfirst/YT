@@ -1,7 +1,10 @@
 module;
 
+//import_std
+
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 module YT:RenderReflectImpl;
 
@@ -12,7 +15,7 @@ import :RenderManager;
 
 namespace YT
 {
-    BufferTypeId RegisterShaderStruct(size_t struct_size, size_t struct_aligned_size, size_t max_elements_per_frame) noexcept
+    BufferTypeId RegisterShaderStruct(std::size_t struct_size, std::size_t struct_aligned_size, std::size_t max_elements_per_frame) noexcept
     {
         return g_RenderManager->RegisterBufferType(struct_size,
             struct_aligned_size, max_elements_per_frame * struct_aligned_size);

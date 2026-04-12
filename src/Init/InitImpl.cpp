@@ -1,5 +1,7 @@
 module;
 
+#include <memory>
+
 module YT:InitImpl;
 
 import :Types;

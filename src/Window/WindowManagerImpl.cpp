@@ -1,17 +1,26 @@
 
 module;
 
-#include <wayland-client.h>
-#include <poll.h>
-
+//import_std
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <cstdio>
 #include <cstring>
+#include <optional>
+#include <functional>
 #include <chrono>
+#include <ratio>
+#include <random>
+#include <format>
+
+#include <poll.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_wayland.h>
+
+#include <wayland-client.h>
 #include <wayland-xdg-shell-client-protocol.h>
 
 module YT:WindowManagerImpl;
@@ -416,7 +425,7 @@ namespace YT
         VerbosePrint("Global remove: {}", name);
     }
 
-    void WindowManager::HandleShellPing(void * data, struct xdg_wm_base * shell, uint32_t serial) noexcept
+    void WindowManager::HandleShellPing(void * data, struct xdg_wm_base * shell, std::uint32_t serial) noexcept
     {
         VerbosePrint("Ping: {}", serial);
         xdg_wm_base_pong(shell, serial);
@@ -442,14 +451,14 @@ namespace YT
         }
     }
 
-    void WindowManager::HandleShellSurfaceConfigure(void * data, struct xdg_surface * shell_surface, uint32_t serial) noexcept
+    void WindowManager::HandleShellSurfaceConfigure(void * data, struct xdg_surface * shell_surface, std::uint32_t serial) noexcept
     {
         VerbosePrint("Shell surface configure: {}", serial);
         xdg_surface_ack_configure(shell_surface, serial);
     }
 
     void WindowManager::HandleToplevelConfigure(void * data, struct xdg_toplevel * toplevel,
-                                                int32_t width, int32_t height, struct wl_array * states) noexcept
+                                                std::int32_t width, std::int32_t height, struct wl_array * states) noexcept
     {
         VerbosePrint("Top level configure: {} {}", width, height);
         WindowHandleData handle = WindowHandleData::CreateFromPtr(data);

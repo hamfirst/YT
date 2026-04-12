@@ -1,19 +1,22 @@
 
 module;
 
+//import_std
+#include <optional>
+#include <vector>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <format>
 #include <ranges>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
-#include <glslang/Public/ShaderLang.h>
-#include <glslang/Public/ResourceLimits.h>
-#include <glslang/SPIRV/GlslangToSpv.h>
-
 export module YT:ShaderBuilder;
 
 import :Types;
+import :GLSLang;
 
 namespace YT
 {
@@ -47,7 +50,7 @@ namespace YT
 				return false;
 			}
 
-			for (size_t pos = result.find("\t"); pos != std::string::npos; pos = result.find("\t", pos + 1))
+			for (std::size_t pos = result.find("\t"); pos != std::string::npos; pos = result.find("\t", pos + 1))
 			{
 				result.replace(pos, 1, "  ");
 			}
@@ -60,21 +63,21 @@ namespace YT
 			switch (shader_type)
 			{
 			case vk::ShaderStageFlagBits::eVertex:
-				return EShLangVertex;
+				return EShLanguage::EShLangVertex;
 			case vk::ShaderStageFlagBits::eTessellationControl:
-				return EShLangTessControl;
+				return EShLanguage::EShLangTessControl;
 			case vk::ShaderStageFlagBits::eTessellationEvaluation:
-				return EShLangTessEvaluation;
+				return EShLanguage::EShLangTessEvaluation;
 			case vk::ShaderStageFlagBits::eGeometry:
-				return EShLangGeometry;
+				return EShLanguage::EShLangGeometry;
 			case vk::ShaderStageFlagBits::eFragment:
-				return EShLangFragment;
+				return EShLanguage::EShLangFragment;
 			case vk::ShaderStageFlagBits::eCompute:
-				return EShLangCompute;
+				return EShLanguage::EShLangCompute;
 			case vk::ShaderStageFlagBits::eMeshEXT:
-				return EShLangMesh;
+				return EShLanguage::EShLangMesh;
 			default:
-				return EShLangVertex;
+				return EShLanguage::EShLangVertex;
 			}
 		}
 
@@ -186,7 +189,7 @@ namespace YT
 						result.append(include_code);
 						result.append(remainder);
 
-						result.append(Format("#line {}\n", line_number));
+						//result.append(Format("#line {}\n", line_number));
 					}
 					else
 					{

@@ -1,10 +1,14 @@
 module;
 
-#include <glm/glm.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <vector>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
+import glm;
 
 export module YT:Drawer;
 
@@ -19,7 +23,7 @@ namespace YT
         Drawer(const vk::CommandBuffer & command_buffer, const DrawerData & drawer_data,
             const PSODeferredSettings & deferred_settings) noexcept;
 
-        void DrawRaw(PSOHandle pso_handle, uint32_t num_verts) noexcept;
+        void DrawRaw(PSOHandle pso_handle, std::uint32_t num_verts) noexcept;
 
         void DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color) noexcept;
 
@@ -41,10 +45,10 @@ namespace YT
         PSODeferredSettings m_PSODeferredSettings;
 
         DrawType m_DrawType = DrawType::None;
-        size_t m_DrawCount = 0;
+        std::size_t m_DrawCount = 0;
 
-        Optional<uint32_t> m_FirstDrawElemIndex = {};
-        Optional<uint32_t> m_PreviousDrawElemIndex = {};
+        Optional<std::uint32_t> m_FirstDrawElemIndex = {};
+        Optional<std::uint32_t> m_PreviousDrawElemIndex = {};
         bool m_ConsecutiveDraws = true;
 
         Vector<IndexData> m_DrawElemIndexData;
