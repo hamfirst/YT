@@ -51,7 +51,7 @@ namespace YT
             vma::AllocationCreateInfo allocation_create_info;
             allocation_create_info.usage = vma::MemoryUsage::eGpuOnly;
 
-            auto [image, allocation] =
+            auto [allocation, image] =
                 allocator->createImageUnique(image_create_info, allocation_create_info);
 
             if (!image || !allocation)

@@ -32,7 +32,7 @@ namespace YT
                 vma::AllocationCreateFlagBits::eHostAccessSequentialWrite;
             allocation_create_info.usage = vma::MemoryUsage::eAutoPreferHost;
 
-            auto [buffer, allocation] =
+            auto [allocation, buffer] =
                 allocator->createBufferUnique(buffer_create_info, allocation_create_info);
 
             m_Buffer = std::move(buffer);

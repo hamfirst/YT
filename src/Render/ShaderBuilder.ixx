@@ -12,6 +12,7 @@ module;
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
+#include <spirv-reflect/spirv_reflect.h>
 
 export module YT:ShaderBuilder;
 
@@ -20,6 +21,13 @@ import :GLSLang;
 
 namespace YT
 {
+	export struct ShaderSpecializationConstantInfo
+	{
+		String m_Name;
+		std::uint32_t m_ConstantId = 0;
+		std::uint32_t m_ConstantSize = 0;
+	};
+
 	export class ShaderBuilder final
 	{
 	public:
@@ -39,7 +47,7 @@ namespace YT
 		}
 
 		bool BuildShader(const vk::ShaderStageFlagBits shader_type, const StringView & file_name,
-			const StringView & shader_code, std::vector<unsigned int> & spirv, const Optional<String> & entry_point)
+			const StringView & shader_code, std::vector<std::uint8_t> & spirv, const Optional<String> & entry_point)
 		{
 			String result, error;
 			Set<String> already_included;
@@ -210,7 +218,8 @@ namespace YT
 		}
 
 		static bool GLSLtoSPV(const vk::ShaderStageFlagBits shader_type, const char * shader_code,
-		                      std::vector<unsigned int> & spirv, const Optional<String> & entry_point)
+		                      Vector<std::uint8_t> & out_spirv,
+		                      const Optional<String> & entry_point)
 		{
 			VerbosePrint("Compiling shader:\n{}", shader_code);
 
@@ -247,7 +256,44 @@ namespace YT
 				return false;
 			}
 
-			glslang::GlslangToSpv(*program.getIntermediate(stage), spirv);
+			std::vector<unsigned int> spriv;
+			glslang::GlslangToSpv(*program.getIntermediate(stage), spriv);
+
+			out_spirv.resize(spriv.size() * sizeof(unsigned int));
+			memcpy(out_spirv.data(), spriv.data(), spriv.size() * sizeof(unsigned int));
+
+			return true;
+		}
+
+	public:
+		static bool GetSpecializationConstantInfo(const Span<const std::uint8_t> & spirv_code,
+							  Vector<ShaderSpecializationConstantInfo> & out_specialization_constants)
+		{
+			spv_reflect::ShaderModule reflection(spirv_code.size(), spirv_code.data());
+			if (reflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS)
+			{
+				FatalPrint("Failed to process spirv code");
+				return false;
+			}
+
+			std::uint32_t num_spec_constants = 0;
+			reflection.EnumerateSpecializationConstants(&num_spec_constants, nullptr);
+
+			Vector<SpvReflectSpecializationConstant> spec_constants;
+			spec_constants.reserve(num_spec_constants);
+			SpvReflectSpecializationConstant* spec_constant_data = spec_constants.data();
+
+			reflection.EnumerateSpecializationConstants(&num_spec_constants, &spec_constant_data);
+
+			for (const SpvReflectSpecializationConstant& spec_constant : spec_constants)
+			{
+				out_specialization_constants.emplace_back(ShaderSpecializationConstantInfo{
+					.m_Name = spec_constant.name,
+					.m_ConstantId = spec_constant.constant_id,
+					.m_ConstantSize = spec_constant.default_value_size,
+				});
+			}
+
 			return true;
 		}
 

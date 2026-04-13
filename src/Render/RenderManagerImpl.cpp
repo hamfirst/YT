@@ -769,7 +769,7 @@ namespace YT
     }
 
     bool RenderManager::CompileShader(const StringView & shader_code, ShaderType type,
-        const StringView & file_name_for_log_output, Vector<uint32_t> & out_shader_data,
+        const StringView & file_name_for_log_output, Vector<std::uint8_t> & out_shader_data,
         const Optional<String> & entry_point) noexcept
     {
         vk::ShaderStageFlagBits vk_shader_type = vk::ShaderStageFlagBits::eFragment;
@@ -1209,12 +1209,51 @@ namespace YT
 
     OptionalPtr<PSOVariant> RenderManager::PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept
     {
-        vk::UniqueShaderModule* vertex_shader_module = FindShaderModule(pso.m_CreateInfo.m_VertexShader);
-        vk::UniqueShaderModule* mesh_shader_module = FindShaderModule(pso.m_CreateInfo.m_MeshShader);
-        vk::UniqueShaderModule* fragment_shader_module = FindShaderModule(pso.m_CreateInfo.m_FragmentShader);
+        vk::UniqueShaderModule* vertex_shader_module = FindShaderModule(pso.m_CreateInfo.m_VertexShader.data());
+        vk::UniqueShaderModule* mesh_shader_module = FindShaderModule(pso.m_CreateInfo.m_MeshShader.data());
+        vk::UniqueShaderModule* fragment_shader_module = FindShaderModule(pso.m_CreateInfo.m_FragmentShader.data());
 
         try
         {
+            vk::SpecializationInfo specialization_info;
+            Vector<vk::SpecializationMapEntry> specialization_entries;
+            Vector<float> specialization_constants;
+
+            auto SetupFeatureConstants = [&](vk::PipelineShaderStageCreateInfo& create_info, Span<const uint8_t>& shader_code)
+            {
+                if (!pso.m_CreateInfo.m_FeatureConstants.empty())
+                {
+                    static Map<const uint8_t*, Vector<ShaderSpecializationConstantInfo>> shader_specialization_constant_lookup;
+                    auto shader_specialization_lookup_itr = shader_specialization_constant_lookup.find(shader_code.data());
+
+                    if (shader_specialization_lookup_itr == shader_specialization_constant_lookup.end())
+                    {
+                        shader_specialization_lookup_itr =
+                            shader_specialization_constant_lookup.emplace(MakePair(shader_code.data(), Vector<ShaderSpecializationConstantInfo>{})).first;
+                        ShaderBuilder::GetSpecializationConstantInfo(shader_code, shader_specialization_lookup_itr->second);
+                    }
+
+                    specialization_entries.clear();
+
+                    create_info.pSpecializationInfo = &specialization_info;
+                    for (const ShaderSpecializationConstantInfo& spec_entry : shader_specialization_lookup_itr->second)
+                    {
+                        if (auto feature_constant_itr = pso.m_CreateInfo.m_FeatureConstants.find(spec_entry.m_Name);
+                            feature_constant_itr != pso.m_CreateInfo.m_FeatureConstants.end())
+                        {
+                            assert(spec_entry.m_ConstantSize == sizeof(float));
+                            specialization_entries.emplace_back(vk::SpecializationMapEntry(spec_entry.m_ConstantId, specialization_constants.size() * sizeof(float), spec_entry.m_ConstantSize));
+                            specialization_constants.push_back(feature_constant_itr->second);
+                        }
+                    }
+
+                    specialization_info.pMapEntries = specialization_entries.data();
+                    specialization_info.mapEntryCount = specialization_entries.size();
+                    specialization_info.pData = specialization_constants.data();
+                    specialization_info.dataSize = specialization_constants.size() * sizeof(float);
+                }
+            };
+
             // create the layout
             std::array descriptor_set_layouts =
             {
@@ -1243,12 +1282,16 @@ namespace YT
                 vertex_shader_stage_create_info.stage = vk::ShaderStageFlagBits::eVertex;
                 vertex_shader_stage_create_info.module = vertex_shader_module->get();
                 vertex_shader_stage_create_info.pName = pso.m_CreateInfo.m_VertexShaderEntryPoint.data();
+
+                SetupFeatureConstants(vertex_shader_stage_create_info, pso.m_CreateInfo.m_VertexShader);
             }
             else if (mesh_shader_module)
             {
                 vertex_shader_stage_create_info.stage = vk::ShaderStageFlagBits::eMeshEXT;
                 vertex_shader_stage_create_info.module = mesh_shader_module->get();
                 vertex_shader_stage_create_info.pName = pso.m_CreateInfo.m_MeshShaderEntryPoint.data();
+
+                SetupFeatureConstants(vertex_shader_stage_create_info, pso.m_CreateInfo.m_MeshShader);
             }
             else
             {
@@ -1262,6 +1305,8 @@ namespace YT
                 fragment_shader_stage_create_info.stage = vk::ShaderStageFlagBits::eFragment;
                 fragment_shader_stage_create_info.module = fragment_shader_module->get();
                 fragment_shader_stage_create_info.pName = pso.m_CreateInfo.m_FragmentShaderEntryPoint.data();
+
+                SetupFeatureConstants(vertex_shader_stage_create_info, pso.m_CreateInfo.m_FragmentShader);
             }
             else
             {

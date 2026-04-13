@@ -18,6 +18,7 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator-hpp CONFIG REQUIRED)
 find_package(glslang CONFIG REQUIRED)
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
+find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 
 find_package(Freetype)
 find_path(PLF_HIVE_INCLUDE_DIRS "plf_hive.h")
@@ -101,6 +102,7 @@ set(YT_LINK_LIBRARIES
         unofficial::VulkanMemoryAllocator-Hpp::VulkanMemoryAllocator-Hpp
         glslang::SPIRV
         glslang::glslang-default-resource-limits
+        unofficial::spirv-reflect
         glm::glm
 )
 

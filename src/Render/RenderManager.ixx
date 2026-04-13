@@ -71,7 +71,7 @@ namespace YT
         void UnregisterShader(const std::uint8_t* shader_data) noexcept;
         void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
         [[nodiscard]] bool CompileShader(const StringView & shader_code, ShaderType type,
-            const StringView & file_name_for_log_output, Vector<std::uint32_t> & out_shader_data,
+            const StringView & file_name_for_log_output, Vector<std::uint8_t> & out_shader_data,
             const Optional<String> & entry_point = {}) noexcept;
 
         [[nodiscard]] MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;

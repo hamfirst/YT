@@ -47,9 +47,9 @@ namespace YT
         PSOHandle m_IndexedPSOHandle;
 
         Vector<ShaderData> m_ShaderData;
-        Vector<std::uint32_t> m_ConsecutiveVertexShaderBinary;
-        Vector<std::uint32_t> m_IndexedVertexShaderBinary;
-        Vector<std::uint32_t> m_FragmentShaderBinary;
+        Vector<std::uint8_t> m_ConsecutiveVertexShaderBinary;
+        Vector<std::uint8_t> m_IndexedVertexShaderBinary;
+        Vector<std::uint8_t> m_FragmentShaderBinary;
         bool m_NeedsRecompile = true;
     };
 

@@ -78,11 +78,8 @@ namespace YT
             throw Exception("Failed to compile indexed quad vertex shader code");
         }
 
-        g_RenderManager->RegisterShader(reinterpret_cast<std::uint8_t *>(m_ConsecutiveVertexShaderBinary.data()),
-            m_ConsecutiveVertexShaderBinary.size() * sizeof(m_ConsecutiveVertexShaderBinary[0]));
-
-        g_RenderManager->RegisterShader(reinterpret_cast<std::uint8_t *>(m_IndexedVertexShaderBinary.data()),
-            m_IndexedVertexShaderBinary.size() * sizeof(m_IndexedVertexShaderBinary[0]));
+        g_RenderManager->RegisterShader(m_ConsecutiveVertexShaderBinary.data(), m_ConsecutiveVertexShaderBinary.size());
+        g_RenderManager->RegisterShader(m_IndexedVertexShaderBinary.data(), m_IndexedVertexShaderBinary.size());
 
         g_RenderManager->GetPreRenderDelegate().BindNoValidityCheck([this]() { UpdateShader(); });
     }
@@ -126,13 +123,13 @@ namespace YT
             if (Recompile())
             {
                 PSOCreateInfo pso_info;
-                pso_info.m_VertexShader = reinterpret_cast<std::uint8_t *>(m_ConsecutiveVertexShaderBinary.data());
+                pso_info.m_VertexShader = m_ConsecutiveVertexShaderBinary;
                 pso_info.m_VertexShaderEntryPoint = "mainConsecutive";
-                pso_info.m_FragmentShader = reinterpret_cast<std::uint8_t *>(m_FragmentShaderBinary.data());
+                pso_info.m_FragmentShader = m_FragmentShaderBinary;
                 pso_info.m_PushConstantsSize = sizeof(QuadRenderData);
                 m_ConsecutivePSOHandle = g_RenderManager->RegisterPSO(pso_info);
 
-                pso_info.m_VertexShader = reinterpret_cast<std::uint8_t *>(m_IndexedVertexShaderBinary.data());
+                pso_info.m_VertexShader = m_IndexedVertexShaderBinary;
                 pso_info.m_VertexShaderEntryPoint = "mainIndexed";
                 m_IndexedPSOHandle = g_RenderManager->RegisterPSO(pso_info);
             }

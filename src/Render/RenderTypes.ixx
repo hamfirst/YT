@@ -34,17 +34,17 @@ namespace YT
     export struct PSOCreateInfo final
     {
         // You must set either vertex or mesh shader
-        OptionalPtr<const std::uint8_t> m_VertexShader = nullptr;
+        Span<const std::uint8_t> m_VertexShader = {};
         StringView m_VertexShaderEntryPoint = "main";
 
-        OptionalPtr<const std::uint8_t> m_MeshShader = nullptr;
+        Span<const std::uint8_t> m_MeshShader = {};
         StringView m_MeshShaderEntryPoint = "main";
 
-        RequiredPtr<const std::uint8_t> m_FragmentShader = nullptr;
+        Span<const std::uint8_t> m_FragmentShader = {};
         StringView m_FragmentShaderEntryPoint = "main";
 
         int m_PushConstantsSize = 0;
-        Vector<Pair<String, String>> m_FeatureConstants;
+        Map<String, float> m_FeatureConstants;
     };
 
     export struct PSODeferredSettings
