@@ -778,6 +778,9 @@ namespace YT
             case ShaderType::Vertex:
                 vk_shader_type = vk::ShaderStageFlagBits::eVertex;
                 break;
+            case ShaderType::Mesh:
+                vk_shader_type = vk::ShaderStageFlagBits::eMeshEXT;
+                break;
             case ShaderType::Fragment:
                 vk_shader_type = vk::ShaderStageFlagBits::eFragment;
                 break;

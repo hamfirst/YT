@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 #set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
 #set(CMAKE_CXX_MODULE_STD ON)
-set(CMAKE_CXX_FLAGS "-fmodules") #-Wno-interference-size  -freflection -fexpansion-statements
+set(CMAKE_CXX_FLAGS "-fmodules -Wno-c23-extensions") #-Wno-interference-size  -freflection -fexpansion-statements
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
 
 project(YT LANGUAGES C CXX)
@@ -90,7 +90,6 @@ set(YT_MODULE_SOURCES
 )
 
 set(YT_EXTERNAL_MODULE_SOURCES
-        src/External/hive/Hive.ixx
         src/External/glm/GLM.ixx
         src/External/glslang/GLSLang.ixx
 )

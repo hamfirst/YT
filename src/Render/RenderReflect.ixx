@@ -213,37 +213,52 @@ namespace YT
 
         if constexpr(std::is_same_v<T, GlobalData>)
         {
-            return {
+            const char data[] =
+            {
                 #embed "../../shaders/Structs/GlobalData.h"
             };
+            String str(&data[0], &data[sizeof(data)]);
+            return str;
         }
 
         if constexpr(std::is_same_v<T, IndexData>)
         {
-            return {
+            const char data[] =
+            {
                 #embed "../../shaders/Structs/IndexData.h"
             };
+            String str(&data[0], &data[sizeof(data)]);
+            return str;
         }
 
         if constexpr(std::is_same_v<T, QuadData>)
         {
-            return {
+            const char data[] =
+            {
                 #embed "../../shaders/Structs/QuadData.h"
             };
+            String str(&data[0], &data[sizeof(data)]);
+            return str;
         }
 
         if constexpr(std::is_same_v<T, QuadRenderData>)
         {
-            return {
+            const char data[] =
+            {
                 #embed "../../shaders/Structs/QuadRenderData.h"
             };
+            String str(&data[0], &data[sizeof(data)]);
+            return str;
         }
 
         if constexpr(std::is_same_v<T, DrawerData>)
         {
-            return {
+            const char data[] =
+            {
                 #embed "../../shaders/Structs/DrawerData.h"
             };
+            String str(&data[0], &data[sizeof(data)]);
+            return str;
         }
 
         assert(false);

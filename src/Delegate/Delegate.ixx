@@ -12,7 +12,6 @@ module;
 export module YT:Delegate;
 
 import :Types;
-import :Hive;
 
 namespace YT
 {
@@ -364,7 +363,7 @@ namespace YT
 
             /// Storage for callbacks (hive for void delegates, optional for non-void)
             std::conditional_t<std::is_same_v<ReturnType, void>,
-                Hive<CallbackData>, Optional<CallbackData>> m_Callbacks;
+                plf::hive<CallbackData>, Optional<CallbackData>> m_Callbacks;
         };
     }
 } 

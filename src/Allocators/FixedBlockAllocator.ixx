@@ -11,7 +11,7 @@ module;
 #include <vector>
 #include <format>
 
-module YT:FixedBlockAllocator;
+export module YT:FixedBlockAllocator;
 
 import :Types;
 
@@ -26,7 +26,7 @@ namespace YT
      * 
      * @tparam T The type of objects to allocate. Must be at least as large as std::size_t.
      */
-    template <typename T>
+    export template <typename T>
     class FixedBlockAllocator final
     {
     public:
@@ -292,7 +292,7 @@ namespace YT
      * 
      * @tparam T The type of objects to allocate. Must be at least as large as std::size_t.
      */
-    template <typename T>
+    export template <typename T>
     class ThreadSafeFixedBlockAllocator
     {
     public:
@@ -525,7 +525,7 @@ namespace YT
      * @tparam InitialAllocationPerThread The initial number of blocks to allocate per thread.
      * @tparam MaxLocalCachePerThread The maximum number of blocks to cache per thread.
      */
-    template <typename T, std::size_t InitialAllocationPerThread = 128, std::size_t MaxLocalCachePerThread = 512>
+    export template <typename T, std::size_t InitialAllocationPerThread = 128, std::size_t MaxLocalCachePerThread = 512>
     class ThreadCachedFixedBlockAllocator
     {
     public:

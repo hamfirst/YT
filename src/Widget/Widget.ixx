@@ -26,8 +26,9 @@ namespace YT
     };
 
     template <typename WidgetClass>
-    struct WidgetStorage final : public WidgetStorageBase
+    struct WidgetStorage final
     {
+        WidgetStorageBase m_Base;
         alignas(WidgetClass) std::byte m_Data[sizeof(WidgetClass)];
     };
 
@@ -49,7 +50,7 @@ namespace YT
             std::byte * storage_start = reinterpret_cast<std::byte *>(m_Widget) - offsetof(WidgetStorage<WidgetClass>, m_Data);
             auto * storage = reinterpret_cast<WidgetStorage<WidgetClass> *>(storage_start);
 
-            m_Storage = storage;
+            m_Storage = &storage->m_Base;
             m_Widget = reinterpret_cast<WidgetClass *>(&storage->m_Data);
             m_Deleter = [](void * ptr) { auto widget = static_cast<WidgetClass *>(ptr); delete widget; };
 
@@ -370,8 +371,8 @@ namespace YT
             if (auto handle = GetWidgetStorage().AllocateHandle())
             {
                 WidgetStorage<MyWidgetClass> * storage = GetWidgetStorage().ResolveHandle(handle);
-                storage->m_Handle = handle;
-                storage->m_GenerationAndRefCountPtr = GetWidgetStorage().GetGenerationPointer(handle);
+                storage->m_Base.m_Handle = handle;
+                storage->m_Base.m_GenerationAndRefCountPtr = GetWidgetStorage().GetGenerationPointer(handle);
                 return &storage->m_Data;
             }
 
@@ -383,7 +384,7 @@ namespace YT
         void operator delete (void * ptr) noexcept
         {
             auto storage = static_cast<WidgetStorage<MyWidgetClass> *>(ptr);
-            GetWidgetStorage().ReleaseHandle(storage->m_Handle);
+            GetWidgetStorage().ReleaseHandle(storage->m_Base.m_Handle);
         }
 
         template <typename Visitor>
