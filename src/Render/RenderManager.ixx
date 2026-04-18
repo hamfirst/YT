@@ -56,6 +56,20 @@ namespace YT
         explicit RenderManager(const ApplicationInitInfo & init_info);
         ~RenderManager();
 
+    private:
+        void CreatePhysicalDevice(const ApplicationInitInfo & init_info);
+        void CreateLogicalDevice();
+        void CreateQueue();
+        void CreateCommandPool();
+
+        void CreateImageDescriptorPool();
+        void CreateImageDescriptorLayout();
+        void CreateImageDescriptorSet();
+
+        void CreateVideoMemoryAllocator();
+
+        void CreateFrameResources();
+
     public:
 
         Delegate<void ()> & GetPreRenderDelegate() noexcept { return m_PreRenderDelegate; }
@@ -70,12 +84,12 @@ namespace YT
         void RegisterShader(const std::uint8_t* shader_data, std::size_t shader_data_size) noexcept;
         void UnregisterShader(const std::uint8_t* shader_data) noexcept;
         void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
-        [[nodiscard]] bool CompileShader(const StringView & shader_code, ShaderType type,
+        bool CompileShader(const StringView & shader_code, ShaderType type,
             const StringView & file_name_for_log_output, Vector<std::uint8_t> & out_shader_data,
             const Optional<String> & entry_point = {}) noexcept;
 
         [[nodiscard]] MaybeInvalid<PSOHandle> RegisterPSO(const PSOCreateInfo & create_info) noexcept;
-        [[nodiscard]] bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, std::size_t push_data_size,
+        bool BindPSO(vk::CommandBuffer & command_buffer, OptionalPtr<const void> push_data, std::size_t push_data_size,
             const PSODeferredSettings & deferred_settings, PSOHandle handle) noexcept;
 
         BufferTypeId RegisterBufferType(std::uint32_t element_size,
@@ -89,7 +103,12 @@ namespace YT
         [[nodiscard]] MaybeInvalid<Pair<std::byte *, BufferDataHandle>> ReserveBufferSpace(
             BufferTypeId buffer_type_id, std::uint32_t buffer_size) noexcept;
 
-        [[nodiscard]] MaybeInvalid<ImageReference> CreateImage(const Span<const std::byte>& data) noexcept;
+        [[nodiscard]] MaybeInvalid<ImageReference> CreateImage(const Span<const std::byte>& image_file_data) noexcept;
+        [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromPixels(
+            const Span<const std::byte>& data, std::uint32_t width, std::uint32_t height) noexcept;
+
+        [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromNativeHandle(
+            std::uint64_t native_handle, std::uint32_t width, std::uint32_t height) noexcept;
         void DestroyImage(ImageHandle handle) noexcept;
 
         void RegisterRenderGlobals();
@@ -97,16 +116,18 @@ namespace YT
 
     protected:
 ;
-        [[nodiscard]] bool CreateSwapChainResources(WindowResource & resource) noexcept;
+        bool CreateSwapChainResources(WindowResource & resource) noexcept;
 
         [[nodiscard]] OptionalPtr<vk::UniqueShaderModule> FindShaderModule(const std::uint8_t * shader_data) noexcept;
 
-        [[nodiscard]] bool UpdateBufferDescriptorSetInfo() noexcept;
+        bool UpdateBufferDescriptorSetInfo() noexcept;
         [[nodiscard]] OptionalPtr<PSOVariant> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
 
-        [[nodiscard]] bool PrepareCommandBuffer(const WindowResource & resource) noexcept;
-        [[nodiscard]] bool CompleteCommandBuffer(const WindowResource & resource) noexcept;
-        [[nodiscard]] bool SubmitCommandBuffer(const WindowResource & resource) noexcept;
+        bool PrepareCommandBuffer(const WindowResource & resource) noexcept;
+        bool CompleteCommandBuffer(const WindowResource & resource) noexcept;
+        bool SubmitCommandBuffer(const WindowResource & resource) noexcept;
+
+        bool SubmitImageUploadCommandBuffer();
 
         template <typename Callback>
         void PushDeferredDeleteCallback(Callback && callback)
@@ -129,6 +150,10 @@ namespace YT
         vk::UniqueDebugUtilsMessengerEXT m_DebugUtilsMessenger;
 #endif
 
+        int m_BestDeviceIndex = -1;
+        int m_BestQueueIndex = -1;
+        Vector<const char *> m_RequiredExtensions;
+
         vk::PhysicalDevice m_PhysicalDevice;
         vk::UniqueDevice m_Device;
         vk::Queue m_Queue;
@@ -143,7 +168,7 @@ namespace YT
         Delegate<void ()> m_PreRenderDelegate;
         Delegate<void ()> m_PostRenderDelegate;
 
-        // shaders
+        // Shaders
         Map<const std::uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
         ShaderBuilder m_ShaderBuilder;
 
@@ -167,6 +192,20 @@ namespace YT
         vk::DescriptorSet m_ImageDescriptorSet;
 
         ImageTable m_ImageTable;
+
+        struct ImageTransferInfo
+        {
+            ImageHandle m_ImageHandle;
+            vk::Image m_Image = nullptr;
+            uint32_t m_Width = 0;
+            uint32_t m_Height = 0;
+        };
+
+        vk::UniqueCommandBuffer m_ImageUploadCommandBuffer;
+        Vector<vk::ImageMemoryBarrier2> m_ImagePreTransferMemoryBarriers;
+        Vector<ImageTransferInfo> m_ImageTransferInfos;
+        Vector<UniquePtr<StagingBuffer>> m_ImageTransferStagingBuffers;
+        Vector<vk::ImageMemoryBarrier2> m_ImagePostTransferMemoryBarriers;
 
         // Frame resources
         struct FrameResource

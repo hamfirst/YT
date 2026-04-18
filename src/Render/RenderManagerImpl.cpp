@@ -16,6 +16,8 @@ module;
 #include <ratio>
 #include <iostream>
 
+#include <gsl/gsl>
+
 #include <stb_image.h>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
@@ -113,285 +115,17 @@ namespace YT
     {
         try
         {
+            CreatePhysicalDevice(init_info);
+            CreateLogicalDevice();
+            CreateQueue();
+            CreateCommandPool();
 
-#if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
-            VULKAN_HPP_DEFAULT_DISPATCHER.init();
-#endif
+            CreateImageDescriptorPool();
+            CreateImageDescriptorLayout();
+            CreateImageDescriptorSet();
 
-            auto CheckLayers = [](Vector<char const*> const& layers,
-                                  Vector<vk::LayerProperties> const& properties)
-            {
-                // return true if all layers are listed in the properties
-                return std::all_of(
-                    layers.begin(),
-                    layers.end(),
-                    [&properties](char const* name)
-                    {
-                        return std::any_of(
-                            properties.begin(),
-                            properties.end(),
-                            [&name](vk::LayerProperties const& property)
-                            {
-                                return strcmp(property.layerName, name) == 0;
-                            });
-                    });
-            };
-
-            constexpr int engine_version = 1;
-            const char* engine_name = "YT";
-
-            vk::ApplicationInfo application_info(
-                init_info.m_ApplicationName.data(),
-                init_info.m_ApplicationVersion,
-                engine_name,
-                engine_version,
-                VK_API_VERSION_1_3);
-
-            Vector<vk::LayerProperties> instance_layer_properties = vk::enumerateInstanceLayerProperties();
-
-            Vector<char const*> instance_layer_names;
-
-#if !defined(NDEBUG)
-            instance_layer_names.push_back("VK_LAYER_KHRONOS_validation");
-#endif
-            if (!CheckLayers(instance_layer_names, instance_layer_properties))
-            {
-                throw Exception(
-                    "Set the environment variable VK_LAYER_PATH to point to the location of your layers");
-            }
-
-            // Enable debug callback extension
-            Vector<char const*> instance_extension_names;
-#if !defined(NDEBUG)
-            instance_extension_names.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
-            instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-            instance_extension_names.push_back(g_WindowManager->GetSurfaceExtensionName());
-            vk::InstanceCreateInfo create_info(
-                vk::InstanceCreateFlags(),
-                &application_info,
-                instance_layer_names,
-                instance_extension_names);
-            m_Instance = vk::createInstanceUnique(create_info);
-
-#if !defined(NDEBUG)
-
-#if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
-            // initialize function pointers for instance
-            VULKAN_HPP_DEFAULT_DISPATCHER.init(m_Instance.get());
-#endif
-
-            pfnVkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-                m_Instance->getProcAddr("vkCreateDebugUtilsMessengerEXT"));
-            if (!pfnVkCreateDebugUtilsMessengerEXT)
-            {
-                throw Exception("GetInstanceProcAddr: Unable to find pfnVkCreateDebugUtilsMessengerEXT function.");
-            }
-
-            pfnVkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-                m_Instance->getProcAddr("vkDestroyDebugUtilsMessengerEXT"));
-            if (!pfnVkDestroyDebugUtilsMessengerEXT)
-            {
-                throw Exception("GetInstanceProcAddr: Unable to find pfnVkDestroyDebugUtilsMessengerEXT function.");
-            }
-
-            vk::DebugUtilsMessageSeverityFlagsEXT severity_flags(
-                vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-                vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-
-            vk::DebugUtilsMessageTypeFlagsEXT message_type_flags(
-                vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
-
-            m_DebugUtilsMessenger = m_Instance->createDebugUtilsMessengerEXTUnique(
-                    vk::DebugUtilsMessengerCreateInfoEXT({}, severity_flags, message_type_flags, &DebugMessageFunc));
-#endif
-
-            Vector<vk::PhysicalDevice> physical_devices = m_Instance->enumeratePhysicalDevices();
-            if(physical_devices.empty())
-            {
-                throw Exception("No physical devices found");
-            }
-
-            // Pick which device to use
-            Optional<vk::PhysicalDevice> best_physical_device;
-            Optional<uint32_t> best_queue_index;
-
-            std::array required_extensions =
-                {
-                    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-                    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-                };
-
-            for(const vk::PhysicalDevice & physical_device : physical_devices)
-            {
-                // Check for extension support
-                std::vector<std::string> extension_names;
-                for(const vk::ExtensionProperties & extension : physical_device.enumerateDeviceExtensionProperties())
-                {
-                    extension_names.push_back(extension.extensionName);
-                }
-
-                bool has_required_extensions = true;
-                for (auto extension_name : required_extensions)
-                {
-                    if (std::ranges::find(extension_names, extension_name) == extension_names.end())
-                    {
-                        has_required_extensions = false;
-                        break;
-                    }
-                }
-
-                if (!has_required_extensions)
-                {
-                    continue;
-                }
-
-                Vector<vk::QueueFamilyProperties> queue_family_properties = physical_device.getQueueFamilyProperties();
-
-                for(size_t index = 0; index < queue_family_properties.size(); index++)
-                {
-                    const vk::QueueFamilyProperties& queue_family_info = queue_family_properties[index];
-                    if ((queue_family_info.queueFlags & vk::QueueFlagBits::eGraphics) &&
-                        (queue_family_info.queueFlags & vk::QueueFlagBits::eCompute) &&
-                        (queue_family_info.queueFlags & vk::QueueFlagBits::eTransfer))
-                    {
-                        if(g_WindowManager->CheckDeviceSupport(physical_device, index))
-                        {
-                            best_physical_device = physical_device;
-                            best_queue_index = index;
-                        }
-                    }
-                }
-            }
-
-            if(!best_physical_device.has_value() || !best_queue_index.has_value())
-            {
-                throw Exception("No physical device found");
-            }
-
-            VerbosePrint("Found valid device: {} - {}", best_physical_device->getProperties().deviceName.data(),
-                best_queue_index.value());
-
-            m_PhysicalDevice = best_physical_device.value();
-
-            // create a Device
-            float graphics_queue_priority = 0.0f;
-            vk::DeviceQueueCreateInfo device_queue_create_info(
-                vk::DeviceQueueCreateFlags(),
-                best_queue_index.value(), 1,
-                &graphics_queue_priority);
-
-            std::vector<const char *> device_layer_names {};
-
-            vk::PhysicalDeviceDescriptorIndexingFeatures physical_device_descriptor_indexing_features;
-            physical_device_descriptor_indexing_features.descriptorBindingSampledImageUpdateAfterBind = true;
-            physical_device_descriptor_indexing_features.descriptorBindingPartiallyBound = true;
-            physical_device_descriptor_indexing_features.descriptorBindingVariableDescriptorCount = true;
-
-            vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR buffer_device_address_features(true);
-            buffer_device_address_features.pNext = &physical_device_descriptor_indexing_features;
-
-            vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features(true);
-            dynamic_rendering_features.pNext = &buffer_device_address_features;
-
-            vk::PhysicalDeviceFeatures device_features;
-            device_features.shaderInt64 = true;
-
-            vk::DeviceCreateInfo device_create_info(
-                vk::DeviceCreateFlags(),
-                device_queue_create_info,
-                device_layer_names,
-                required_extensions,
-                &device_features, &dynamic_rendering_features);
-
-            m_Device = m_PhysicalDevice.createDeviceUnique(device_create_info);
-
-            // get the queues
-            m_Device->getQueue(best_queue_index.value(), 0, &m_Queue);
-
-            // create the command pool
-            vk::CommandPoolCreateInfo command_pool_create_info;
-            command_pool_create_info.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-            command_pool_create_info.queueFamilyIndex = best_queue_index.value();
-            m_CommandPool = m_Device->createCommandPoolUnique(command_pool_create_info);
-
-            // create the image pool
-            std::array descriptor_pool_sizes =
-            {
-                vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MaxImageDescriptors)
-            };
-
-            vk::DescriptorPoolCreateInfo descriptor_pool_create_info;
-            descriptor_pool_create_info.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind;
-            descriptor_pool_create_info.maxSets = 1;
-            descriptor_pool_create_info.setPoolSizes(descriptor_pool_sizes);
-            m_ImageDescriptorPool = m_Device->createDescriptorPoolUnique(descriptor_pool_create_info);
-
-            // create the image descriptor layout
-            std::array image_set_bindings =
-                {
-                    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eCombinedImageSampler,
-                        MaxImageDescriptors, vk::ShaderStageFlagBits::eFragment)
-                };
-
-            std::array image_set_binding_flags =
-                {
-                    vk::DescriptorBindingFlagBits::ePartiallyBound |
-                    vk::DescriptorBindingFlagBits::eVariableDescriptorCount |
-                    vk::DescriptorBindingFlagBits::eUpdateAfterBind
-                };
-
-            vk::DescriptorSetLayoutBindingFlagsCreateInfo descriptor_set_layout_binding_flags_create_info;
-            descriptor_set_layout_binding_flags_create_info.setBindingFlags(image_set_binding_flags);
-
-            vk::DescriptorSetLayoutCreateInfo image_set_layout_create_info;
-            image_set_layout_create_info.setBindings(image_set_bindings);
-            image_set_layout_create_info.flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool;
-            image_set_layout_create_info.pNext = &descriptor_set_layout_binding_flags_create_info;
-            m_ImageDescriptorSetLayout = m_Device->createDescriptorSetLayoutUnique(image_set_layout_create_info);
-
-            std::array descriptor_set_layouts =
-            {
-                m_ImageDescriptorSetLayout.get(),
-            };
-
-            vk::DescriptorSetAllocateInfo descriptor_set_allocate_info;
-            descriptor_set_allocate_info.descriptorPool = m_ImageDescriptorPool.get();
-            descriptor_set_allocate_info.setSetLayouts(descriptor_set_layouts);
-
-            auto descriptor_sets = m_Device->allocateDescriptorSets(
-                descriptor_set_allocate_info);
-
-            m_ImageDescriptorSet = descriptor_sets.front();
-
-            // create the vma allocator
-            vma::AllocatorCreateInfo allocator_create_info;
-            allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
-            allocator_create_info.instance = m_Instance.get();
-            allocator_create_info.physicalDevice = m_PhysicalDevice;
-            allocator_create_info.device = m_Device.get();
-
-            m_Allocator = vma::createAllocatorUnique(allocator_create_info);
-
-            // create per-frame buffers
-            vk::FenceCreateInfo fence_create_info;
-            fence_create_info.flags = vk::FenceCreateFlagBits::eSignaled;
-
-            vk::CommandBufferAllocateInfo allocate_info;
-            allocate_info.commandPool = m_CommandPool.get();
-            allocate_info.level = vk::CommandBufferLevel::ePrimary;
-            allocate_info.commandBufferCount = 1;
-
-            for (auto & frame_resource : m_FrameResources)
-            {
-                frame_resource.m_Fence = m_Device->createFenceUnique(fence_create_info);
-
-                auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
-                frame_resource.m_CommandBuffer = std::move(buffer_list.front());
-            }
+            CreateVideoMemoryAllocator();
+            CreateFrameResources();
 
             if (!UpdateBufferDescriptorSetInfo())
             {
@@ -422,6 +156,322 @@ namespace YT
             }
         }
 
+    }
+
+    void RenderManager::CreatePhysicalDevice(const ApplicationInitInfo & init_info)
+    {
+#if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
+        VULKAN_HPP_DEFAULT_DISPATCHER.init();
+#endif
+
+        auto CheckLayers = [](Vector<char const*> const& layers,
+                              Vector<vk::LayerProperties> const& properties)
+        {
+            // return true if all layers are listed in the properties
+            return std::all_of(
+                layers.begin(),
+                layers.end(),
+                [&properties](char const* name)
+                {
+                    return std::any_of(
+                        properties.begin(),
+                        properties.end(),
+                        [&name](vk::LayerProperties const& property)
+                        {
+                            return strcmp(property.layerName, name) == 0;
+                        });
+                });
+        };
+
+        constexpr int engine_version = 1;
+        const char* engine_name = "YT";
+
+        vk::ApplicationInfo application_info(
+            init_info.m_ApplicationName.data(),
+            init_info.m_ApplicationVersion,
+            engine_name,
+            engine_version,
+            VK_API_VERSION_1_3);
+
+        Vector<vk::LayerProperties> instance_layer_properties = vk::enumerateInstanceLayerProperties();
+
+        Vector<char const*> instance_layer_names;
+
+#if !defined(NDEBUG)
+        instance_layer_names.push_back("VK_LAYER_KHRONOS_validation");
+#endif
+        if (!CheckLayers(instance_layer_names, instance_layer_properties))
+        {
+            throw Exception(
+                "Set the environment variable VK_LAYER_PATH to point to the location of your layers");
+        }
+
+        // Enable debug callback extension
+        Vector<char const*> instance_extension_names;
+#if !defined(NDEBUG)
+        instance_extension_names.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
+        instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+        instance_extension_names.push_back(g_WindowManager->GetSurfaceExtensionName());
+        vk::InstanceCreateInfo create_info(
+            vk::InstanceCreateFlags(),
+            &application_info,
+            instance_layer_names,
+            instance_extension_names);
+        m_Instance = vk::createInstanceUnique(create_info);
+
+#if !defined(NDEBUG)
+
+#if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
+        // initialize function pointers for instance
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(m_Instance.get());
+#endif
+
+        pfnVkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+            m_Instance->getProcAddr("vkCreateDebugUtilsMessengerEXT"));
+        if (!pfnVkCreateDebugUtilsMessengerEXT)
+        {
+            throw Exception("GetInstanceProcAddr: Unable to find pfnVkCreateDebugUtilsMessengerEXT function.");
+        }
+
+        pfnVkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+            m_Instance->getProcAddr("vkDestroyDebugUtilsMessengerEXT"));
+        if (!pfnVkDestroyDebugUtilsMessengerEXT)
+        {
+            throw Exception("GetInstanceProcAddr: Unable to find pfnVkDestroyDebugUtilsMessengerEXT function.");
+        }
+
+        vk::DebugUtilsMessageSeverityFlagsEXT severity_flags(
+            vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+            vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+
+        vk::DebugUtilsMessageTypeFlagsEXT message_type_flags(
+            vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+            vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+            vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+
+        m_DebugUtilsMessenger = m_Instance->createDebugUtilsMessengerEXTUnique(
+                vk::DebugUtilsMessengerCreateInfoEXT({}, severity_flags, message_type_flags, &DebugMessageFunc));
+#endif
+
+        Vector<vk::PhysicalDevice> physical_devices = m_Instance->enumeratePhysicalDevices();
+        if(physical_devices.empty())
+        {
+            throw Exception("No physical devices found");
+        }
+
+        // Pick which device to use
+        Optional<vk::PhysicalDevice> best_physical_device;
+        Optional<uint32_t> best_queue_index;
+
+        m_RequiredExtensions =
+        {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+            VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+            VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
+            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+            VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        };
+
+        m_BestDeviceIndex = -1;
+        for(const vk::PhysicalDevice & physical_device : physical_devices)
+        {
+            m_BestDeviceIndex++;
+
+            // Check for extension support
+            std::vector<std::string> extension_names;
+            for(const vk::ExtensionProperties & extension : physical_device.enumerateDeviceExtensionProperties())
+            {
+                extension_names.push_back(extension.extensionName);
+            }
+
+            bool has_required_extensions = true;
+            for (auto extension_name : m_RequiredExtensions)
+            {
+                if (std::ranges::find(extension_names, extension_name) == extension_names.end())
+                {
+                    has_required_extensions = false;
+                    break;
+                }
+            }
+
+            if (!has_required_extensions)
+            {
+                continue;
+            }
+
+            Vector<vk::QueueFamilyProperties> queue_family_properties = physical_device.getQueueFamilyProperties();
+
+            for(size_t index = 0; index < queue_family_properties.size(); index++)
+            {
+                const vk::QueueFamilyProperties& queue_family_info = queue_family_properties[index];
+                if ((queue_family_info.queueFlags & vk::QueueFlagBits::eGraphics) &&
+                    (queue_family_info.queueFlags & vk::QueueFlagBits::eCompute) &&
+                    (queue_family_info.queueFlags & vk::QueueFlagBits::eTransfer))
+                {
+                    if(g_WindowManager->CheckDeviceSupport(physical_device, index))
+                    {
+                        best_physical_device = physical_device;
+                        best_queue_index = index;
+                    }
+                }
+            }
+        }
+
+        if(!best_physical_device.has_value() || !best_queue_index.has_value())
+        {
+            throw Exception("No physical device found");
+        }
+
+        VerbosePrint("Found valid device: {} - {}", best_physical_device->getProperties().deviceName.data(),
+            best_queue_index.value());
+
+        m_PhysicalDevice = best_physical_device.value();
+        m_BestQueueIndex = best_queue_index.value();
+    }
+
+    void RenderManager::CreateLogicalDevice()
+    {
+        // create a Device
+        float graphics_queue_priority = 0.0f;
+        vk::DeviceQueueCreateInfo device_queue_create_info(
+            vk::DeviceQueueCreateFlags(),
+            m_BestQueueIndex, 1,
+            &graphics_queue_priority);
+
+        vk::PhysicalDeviceFeatures2 device_features;
+        device_features.features.shaderInt64 = true;
+
+        vk::PhysicalDeviceVulkan11Features device_features11;
+        device_features.pNext = &device_features11;
+
+        vk::PhysicalDeviceVulkan12Features device_features12;
+        device_features12.descriptorIndexing = true;
+        device_features12.shaderSampledImageArrayNonUniformIndexing = true;
+        device_features12.runtimeDescriptorArray = true;
+        device_features12.descriptorBindingPartiallyBound = true;
+        device_features12.descriptorBindingSampledImageUpdateAfterBind = true;
+        device_features12.bufferDeviceAddress = true;
+        device_features12.timelineSemaphore = true;
+        device_features11.pNext = &device_features12;
+
+        vk::PhysicalDeviceVulkan13Features device_features13;
+        device_features13.dynamicRendering = true;
+        device_features13.synchronization2 = true;
+        device_features12.pNext = &device_features13;
+
+        vk::DeviceCreateInfo device_create_info;
+        device_create_info.setQueueCreateInfos(device_queue_create_info);
+        device_create_info.setPEnabledExtensionNames(m_RequiredExtensions);
+        device_create_info.pNext = &device_features;
+
+        m_Device = m_PhysicalDevice.createDeviceUnique(device_create_info);
+    }
+
+    void RenderManager::CreateQueue()
+    {
+        // get the queues
+        m_Device->getQueue(m_BestQueueIndex, 0, &m_Queue);
+    }
+
+    void RenderManager::CreateCommandPool()
+    {
+        // create the command pool
+        vk::CommandPoolCreateInfo command_pool_create_info;
+        command_pool_create_info.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+        command_pool_create_info.queueFamilyIndex = m_BestQueueIndex;
+        m_CommandPool = m_Device->createCommandPoolUnique(command_pool_create_info);
+    }
+
+    void RenderManager::CreateImageDescriptorPool()
+    {
+        // create the image pool
+        std::array descriptor_pool_sizes =
+        {
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MaxImageDescriptors)
+        };
+
+        vk::DescriptorPoolCreateInfo descriptor_pool_create_info;
+        descriptor_pool_create_info.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind;
+        descriptor_pool_create_info.maxSets = 1;
+        descriptor_pool_create_info.setPoolSizes(descriptor_pool_sizes);
+        m_ImageDescriptorPool = m_Device->createDescriptorPoolUnique(descriptor_pool_create_info);
+    }
+
+    void RenderManager::CreateImageDescriptorLayout()
+    {
+        // create the image descriptor layout
+        std::array image_set_bindings =
+        {
+            vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eCombinedImageSampler,
+                MaxImageDescriptors, vk::ShaderStageFlagBits::eFragment)
+        };
+
+        std::array image_set_binding_flags =
+        {
+            vk::DescriptorBindingFlagBits::ePartiallyBound |
+            vk::DescriptorBindingFlagBits::eVariableDescriptorCount |
+            vk::DescriptorBindingFlagBits::eUpdateAfterBind
+        };
+
+        vk::DescriptorSetLayoutBindingFlagsCreateInfo descriptor_set_layout_binding_flags_create_info;
+        descriptor_set_layout_binding_flags_create_info.setBindingFlags(image_set_binding_flags);
+
+        vk::DescriptorSetLayoutCreateInfo image_set_layout_create_info;
+        image_set_layout_create_info.setBindings(image_set_bindings);
+        image_set_layout_create_info.flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool;
+        image_set_layout_create_info.pNext = &descriptor_set_layout_binding_flags_create_info;
+        m_ImageDescriptorSetLayout = m_Device->createDescriptorSetLayoutUnique(image_set_layout_create_info);
+    }
+
+    void RenderManager::CreateImageDescriptorSet()
+    {
+        std::array descriptor_set_layouts =
+        {
+            m_ImageDescriptorSetLayout.get(),
+        };
+
+        vk::DescriptorSetAllocateInfo descriptor_set_allocate_info;
+        descriptor_set_allocate_info.descriptorPool = m_ImageDescriptorPool.get();
+        descriptor_set_allocate_info.setSetLayouts(descriptor_set_layouts);
+
+        auto descriptor_sets = m_Device->allocateDescriptorSets(
+            descriptor_set_allocate_info);
+
+        m_ImageDescriptorSet = descriptor_sets.front();
+    }
+
+    void RenderManager::CreateVideoMemoryAllocator()
+    {
+        // create the vma allocator
+        vma::AllocatorCreateInfo allocator_create_info;
+        allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
+        allocator_create_info.instance = m_Instance.get();
+        allocator_create_info.physicalDevice = m_PhysicalDevice;
+        allocator_create_info.device = m_Device.get();
+
+        m_Allocator = vma::createAllocatorUnique(allocator_create_info);
+    }
+
+    void RenderManager::CreateFrameResources()
+    {
+        // create per-frame buffers
+        vk::FenceCreateInfo fence_create_info;
+        fence_create_info.flags = vk::FenceCreateFlagBits::eSignaled;
+
+        vk::CommandBufferAllocateInfo allocate_info;
+        allocate_info.commandPool = m_CommandPool.get();
+        allocate_info.level = vk::CommandBufferLevel::ePrimary;
+        allocate_info.commandBufferCount = 1;
+
+        for (auto & frame_resource : m_FrameResources)
+        {
+            frame_resource.m_Fence = m_Device->createFenceUnique(fence_create_info);
+
+            auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
+            frame_resource.m_CommandBuffer = std::move(buffer_list.front());
+        }
     }
 
     bool RenderManager::CreateWindowResources(const WindowInitInfo & init_info, WindowResource & resource) noexcept
@@ -489,6 +539,8 @@ namespace YT
 
     bool RenderManager::RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept
     {
+        SubmitImageUploadCommandBuffer();
+
         vk::Result result = vk::Result::eSuccess;
 
         // Sync the frame
@@ -892,55 +944,59 @@ namespace YT
         return MakePair(ptr, data_handle);
     }
 
-    MaybeInvalid<ImageReference> RenderManager::CreateImage(const Span<const std::byte>& data) noexcept
+    MaybeInvalid<ImageReference> RenderManager::CreateImage(const Span<const std::byte>& image_file_data) noexcept
     {
         int tex_width, tex_height, tex_channels;
-        stbi_uc* pixels = stbi_load_from_memory(reinterpret_cast<stbi_uc const *>(data.data()),
-            static_cast<int>(data.size()), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
+        stbi_uc* pixels = stbi_load_from_memory(reinterpret_cast<stbi_uc const *>(image_file_data.data()),
+            static_cast<int>(image_file_data.size()), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
+
+        auto _ = gsl::finally([&]()
+        {
+            if (pixels)
+            {
+                stbi_image_free(pixels);
+            }
+        });
 
         if (!pixels || tex_channels != STBI_rgb_alpha)
         {
             return {};
         }
 
+        return CreateImageFromPixels(Span(reinterpret_cast<std::byte *>(pixels),
+            tex_width * tex_height * 4), tex_width, tex_height);
+    }
+
+    MaybeInvalid<ImageReference> RenderManager::CreateImageFromPixels(const Span<const std::byte>& data,
+        std::uint32_t width, std::uint32_t height) noexcept
+    {
         try
         {
-            UniquePtr<StagingBuffer> staging_buffer = MakeUnique<StagingBuffer>(
-                m_Device, m_Allocator, pixels, tex_width * tex_height * 4);
+            if (data.size() != width * height * 4)
+            {
+                FatalPrint("Image buffer not providing the correct number of bytes");
+            }
 
-            vk::CommandBufferAllocateInfo allocate_info;
-            allocate_info.commandPool = m_CommandPool.get();
-            allocate_info.level = vk::CommandBufferLevel::ePrimary;
-            allocate_info.commandBufferCount = 1;
+            UniquePtr<StagingBuffer> staging_buffer =
+                MakeUnique<StagingBuffer>(m_Device, m_Allocator, data);
+            m_ImageTransferStagingBuffers.emplace_back(std::move(staging_buffer));
 
-            auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
-            vk::UniqueCommandBuffer command_buffer = std::move(buffer_list.front());
+            auto handle = m_ImageTable.AllocateHandle(m_Device, m_Allocator,
+                m_ImagePreTransferMemoryBarriers, m_ImagePostTransferMemoryBarriers,
+                width, height, ImageFormat::R8G8B8A8Unorm);
 
-            vk::CommandBufferBeginInfo begin_info;
-            command_buffer->begin(begin_info);
-
-            auto handle = m_ImageTable.AllocateHandle(m_Device, m_Allocator, command_buffer.get(),
-                *staging_buffer.get(), tex_width, tex_height, ImageFormat::R8G8B8A8Unorm);
-
-            ImageHandle image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
+            auto image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
             uint32_t image_index = image_handle.m_BlockIndex * ImageTable::BlockSizeValue + image_handle.m_ElemIndex;
 
-            command_buffer->end();
+            m_ImageTransferInfos.emplace_back(ImageTransferInfo
+                {
+                    .m_ImageHandle = { handle },
+                    .m_Image = m_ImageTable.ResolveHandle(handle)->GetImage(),
+                    .m_Width = width,
+                    .m_Height = height,
+                });
 
-            std::array cmd_buffers = { command_buffer.get() };
-
-            vk::PipelineStageFlags pipe_stage_flags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-
-            vk::SubmitInfo submit_info;
-            submit_info.setWaitDstStageMask(pipe_stage_flags);
-            submit_info.setCommandBuffers(cmd_buffers);
-            //submit_info.setSignalSemaphores(render_finish_semaphores);
-
-            // vk::Result result = m_Queue.submit(1, &submit_info,
-            //     resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
-
-            PushDeferredDeleteObject(std::move(staging_buffer));
-            PushDeferredDeleteObject(std::move(command_buffer));
+            return { image_handle, width, height, image_index };
         }
         catch (...)
         {
@@ -951,9 +1007,23 @@ namespace YT
         return {};
     }
 
+    MaybeInvalid<ImageReference> RenderManager::CreateImageFromNativeHandle(
+        std::uint64_t native_handle, std::uint32_t width, std::uint32_t height) noexcept
+    {
+        auto image = reinterpret_cast<VkImage>(native_handle);
+
+        auto handle = m_ImageTable.AllocateHandle(m_Device, m_Allocator,
+            image, width, height, ImageFormat::R8G8B8A8Unorm);
+
+        auto image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
+        uint32_t image_index = image_handle.m_BlockIndex * ImageTable::BlockSizeValue + image_handle.m_ElemIndex;
+
+        return { image_handle, width, height, image_index };
+    }
+
     void RenderManager::DestroyImage(ImageHandle handle) noexcept
     {
-
+        m_ImageTable.ReleaseHandle(handle);
     }
 
     void RenderManager::RegisterRenderGlobals()
@@ -1610,4 +1680,93 @@ namespace YT
         return false;
     }
 
-}
+    bool RenderManager::SubmitImageUploadCommandBuffer()
+    {
+        if (m_ImageTransferInfos.empty())
+        {
+            return false;
+        }
+
+        // Make sure all arrays match
+        assert(m_ImageTransferInfos.size() == m_ImageTransferStagingBuffers.size());
+        assert(m_ImageTransferInfos.size() == m_ImagePreTransferMemoryBarriers.size());
+        assert(m_ImageTransferInfos.size() == m_ImagePostTransferMemoryBarriers.size());
+
+        // Remove any invalid images
+        for (int index = 0; index < m_ImageTransferInfos.size(); index++)
+        {
+            if (!m_ImageTable.ResolveHandle(m_ImageTransferInfos[index].m_ImageHandle))
+            {
+                m_ImageTransferInfos.erase(m_ImageTransferInfos.begin() + index);
+                m_ImagePreTransferMemoryBarriers.erase(m_ImagePreTransferMemoryBarriers.begin() + index);
+                m_ImagePostTransferMemoryBarriers.erase(m_ImagePostTransferMemoryBarriers.begin() + index);
+
+                PushDeferredDeleteObject(std::move(m_ImageTransferStagingBuffers[index]));
+                m_ImageTransferStagingBuffers.erase(m_ImageTransferStagingBuffers.begin() + index);
+
+                --index;
+            }
+        }
+
+        assert(m_ImageTransferInfos.size() == m_ImageTransferStagingBuffers.size());
+        assert(m_ImageTransferInfos.size() == m_ImagePreTransferMemoryBarriers.size());
+        assert(m_ImageTransferInfos.size() == m_ImagePostTransferMemoryBarriers.size());
+
+        // Get a command buffer
+        vk::CommandBufferAllocateInfo allocate_info;
+        allocate_info.commandPool = m_CommandPool.get();
+        allocate_info.level = vk::CommandBufferLevel::ePrimary;
+        allocate_info.commandBufferCount = 1;
+
+        auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
+        m_ImageUploadCommandBuffer = std::move(buffer_list.front());
+
+        vk::CommandBufferBeginInfo begin_info;
+        m_ImageUploadCommandBuffer->begin(begin_info);
+
+        // Pre transfer pipeline barriers
+        vk::DependencyInfo dep_info;
+        dep_info.setImageMemoryBarriers(m_ImagePreTransferMemoryBarriers);
+        m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
+
+        // Transfer
+        for (std::size_t index = 0; index < m_ImageTransferInfos.size(); index++)
+        {
+            m_ImageTransferStagingBuffers[index]->Transfer(m_ImageUploadCommandBuffer.get(),
+                m_ImageTransferInfos[index].m_Image,
+                m_ImageTransferInfos[index].m_Width, m_ImageTransferInfos[index].m_Height);
+
+            PushDeferredDeleteObject(std::move(m_ImageTransferStagingBuffers[index]));
+        }
+
+        // Post transfer pipeline barriers
+        dep_info.setImageMemoryBarriers(m_ImagePostTransferMemoryBarriers);
+        m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
+
+        m_ImageUploadCommandBuffer->end();
+
+        vk::CommandBufferSubmitInfo command_buffer_submit_info;
+        command_buffer_submit_info.setCommandBuffer(m_ImageUploadCommandBuffer.get());
+
+        std::array command_buffer_submit_infos{ command_buffer_submit_info };
+
+        vk::SubmitInfo2 submit_info;
+        submit_info.setCommandBufferInfos(command_buffer_submit_infos);
+
+        vk::Result result = m_Queue.submit2(1, &submit_info, vk::Fence());
+        PushDeferredDeleteObject(std::move(m_ImageUploadCommandBuffer));
+
+        m_ImageTransferInfos.clear();
+        m_ImageTransferStagingBuffers.clear();
+        m_ImagePreTransferMemoryBarriers.clear();
+        m_ImagePostTransferMemoryBarriers.clear();
+
+        if (result != vk::Result::eSuccess)
+        {
+            FatalPrint("Failed to submit image upload command buffer");
+        }
+
+        return true;
+    }
+
+    } // namespace YT

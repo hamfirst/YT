@@ -30,6 +30,9 @@
     "name" : "plf-hive",
     "version>=" : "2025-12-22"
   }, {
+    "name" : "ms-gsl",
+    "version>=" : "4.2.1#0"
+  }, {
     "name" : "glm",
     "version>=" : "1.0.3"
   }, {

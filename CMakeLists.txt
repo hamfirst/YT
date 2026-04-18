@@ -20,6 +20,7 @@ find_package(glslang CONFIG REQUIRED)
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 
+find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(Freetype)
 find_path(PLF_HIVE_INCLUDE_DIRS "plf_hive.h")
 find_package(glm CONFIG REQUIRED)
@@ -95,6 +96,7 @@ set(YT_EXTERNAL_MODULE_SOURCES
 )
 
 set(YT_LINK_LIBRARIES
+        Microsoft.GSL::GSL
         wayland-client
         vulkan
         GPUOpen::VulkanMemoryAllocator

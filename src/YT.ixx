@@ -17,14 +17,15 @@ export import :Widget;
 export import :Drawer;
 export import :RenderTypes;
 export import :RenderReflect;
+export import :ImageReference;
 export import :WindowTypes;
 export import :JobManager;
 
 namespace YT
 {
-    export WindowHandle CreateWindow(const WindowInitInfo & window_info);
+    export [[nodiscard]] MaybeInvalid<WindowHandle> CreateWindow(const WindowInitInfo & window_info);
 
-    export WindowRef CreateWindow_GetRef(const WindowInitInfo & init_info) noexcept
+    export [[nodiscard]] MaybeInvalid<WindowRef> CreateWindow_GetRef(const WindowInitInfo & init_info) noexcept
     {
         return WindowRef(init_info);
     }
@@ -37,5 +38,10 @@ namespace YT
         RegisterShader(shader_data, ArraySize);
     }
 
-    export MaybeInvalid<PSOHandle> CreatePSO(const PSOCreateInfo & create_info) noexcept;
+    export [[nodiscard]] MaybeInvalid<PSOHandle> CreatePSO(const PSOCreateInfo & create_info) noexcept;
+
+    export [[nodiscard]] MaybeInvalid<ImageReference> LoadImageFromFile(const char * filename) noexcept;
+    export [[nodiscard]] MaybeInvalid<ImageReference> LoadImageFromData(const Span<std::byte>& image_data) noexcept;
+    export [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromNativeHandle(
+        void * native_handle, std::uint32_t width, std::uint32_t height) noexcept;
 }

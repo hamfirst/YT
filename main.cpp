@@ -20,18 +20,6 @@ import YT;
 
 using namespace YT;
 
-PSOHandle g_PSOHandle;
-
-std::uint8_t g_TestTriangle_VS[] =
-{
-#embed "shaders/bin/TestTriangle.spv"
-};
-
-std::uint8_t g_TestFrag_FS[] =
-{
-#embed "shaders/bin/TestFrag.spv"
-};
-
 class TestWidget : public Widget<TestWidget>
 {
 public:
@@ -53,19 +41,10 @@ int main()
     if (!Init(init_info))
     {
         FatalPrint("YT::Init failed");
-        return 1;
+        return ENODEV;
     }
 
-    RegisterShader(g_TestTriangle_VS);
-    RegisterShader(g_TestFrag_FS);
-
-    PSOCreateInfo pso_create_info;
-    pso_create_info.m_VertexShader = g_TestTriangle_VS;
-    pso_create_info.m_FragmentShader = g_TestFrag_FS;
-    g_PSOHandle = CreatePSO(pso_create_info);
-
     WindowInitInfo window_init_info;
-
     if (WindowRef window_ref = CreateWindow_GetRef(window_init_info))
     {
         window_ref.SetContent(MakeWidget<TestWidget>());

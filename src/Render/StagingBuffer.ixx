@@ -20,11 +20,11 @@ namespace YT
     class StagingBuffer
     {
     public:
-        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, const void * data, std::size_t size)
-            : m_Device(device), m_Allocator(allocator), m_AllocationSize(size)
+        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, const Span<const std::byte> & data)
+            : m_Device(device), m_Allocator(allocator), m_AllocationSize(data.size())
         {
             vk::BufferCreateInfo buffer_create_info;
-            buffer_create_info.size = size;
+            buffer_create_info.size = data.size();
             buffer_create_info.usage = vk::BufferUsageFlagBits::eTransferSrc;
 
             vma::AllocationCreateInfo allocation_create_info;
@@ -38,14 +38,14 @@ namespace YT
             m_Buffer = std::move(buffer);
             m_Allocation = std::move(allocation);
 
-            std::byte * ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
+            auto * ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
 
             if (!ptr)
             {
                 throw Exception("Could not map allocation memory");
             }
 
-            memcpy(ptr, data, size);
+            memcpy(ptr, data.data(), data.size());
 
             m_Allocator->unmapMemory(m_Allocation.get());
         }
@@ -56,12 +56,12 @@ namespace YT
         StagingBuffer& operator=(StagingBuffer&&) noexcept = delete;
         ~StagingBuffer() noexcept = default;
 
-        vk::Buffer GetBuffer() const noexcept
+        [[nodiscard]] vk::Buffer GetBuffer() const noexcept
         {
             return m_Buffer.get();
         }
 
-        std::size_t GetAllocationSize() const noexcept
+        [[nodiscard]] std::size_t GetAllocationSize() const noexcept
         {
             return m_AllocationSize;
         }
