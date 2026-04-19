@@ -119,6 +119,7 @@ namespace YT
             CreateLogicalDevice();
             CreateQueue();
             CreateCommandPool();
+            CreateFrameSemaphore();
 
             CreateImageDescriptorPool();
             CreateImageDescriptorLayout();
@@ -267,6 +268,8 @@ namespace YT
         m_RequiredExtensions =
         {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
+            VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
             VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
@@ -361,6 +364,10 @@ namespace YT
         device_features13.synchronization2 = true;
         device_features12.pNext = &device_features13;
 
+        vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT swap_features = {};
+        swap_features.swapchainMaintenance1 = VK_TRUE;
+        device_features13.pNext = &swap_features;
+
         vk::DeviceCreateInfo device_create_info;
         device_create_info.setQueueCreateInfos(device_queue_create_info);
         device_create_info.setPEnabledExtensionNames(m_RequiredExtensions);
@@ -382,6 +389,19 @@ namespace YT
         command_pool_create_info.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
         command_pool_create_info.queueFamilyIndex = m_BestQueueIndex;
         m_CommandPool = m_Device->createCommandPoolUnique(command_pool_create_info);
+    }
+
+    void RenderManager::CreateFrameSemaphore()
+    {
+        vk::SemaphoreTypeCreateInfo semaphore_type_create_info;
+        semaphore_type_create_info.setSemaphoreType(vk::SemaphoreType::eTimeline);
+        semaphore_type_create_info.setInitialValue(0);
+
+        vk::SemaphoreCreateInfo semaphore_create_info;
+        semaphore_create_info.pNext = &semaphore_type_create_info;
+
+        m_FrameSemaphore = m_Device->createSemaphoreUnique(semaphore_create_info);
+        m_FrameSemaphoreValue = 1;
     }
 
     void RenderManager::CreateImageDescriptorPool()
@@ -457,9 +477,6 @@ namespace YT
     void RenderManager::CreateFrameResources()
     {
         // create per-frame buffers
-        vk::FenceCreateInfo fence_create_info;
-        fence_create_info.flags = vk::FenceCreateFlagBits::eSignaled;
-
         vk::CommandBufferAllocateInfo allocate_info;
         allocate_info.commandPool = m_CommandPool.get();
         allocate_info.level = vk::CommandBufferLevel::ePrimary;
@@ -467,8 +484,6 @@ namespace YT
 
         for (auto & frame_resource : m_FrameResources)
         {
-            frame_resource.m_Fence = m_Device->createFenceUnique(fence_create_info);
-
             auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
             frame_resource.m_CommandBuffer = std::move(buffer_list.front());
         }
@@ -492,9 +507,6 @@ namespace YT
             }
 
             vk::SemaphoreCreateInfo semaphore_create_info;
-            vk::FenceCreateInfo fence_create_info;
-            fence_create_info.flags = vk::FenceCreateFlagBits::eSignaled;
-
             for (const vk::Image & swap_chain_image : resource.m_SwapChainImages)
             {
                 resource.m_ImageAvailableSemaphores.emplace_back(
@@ -503,8 +515,7 @@ namespace YT
                 resource.m_RenderFinishedSemaphores.emplace_back(
                     m_Device->createSemaphoreUnique(semaphore_create_info));
 
-                resource.m_RenderFinishedFences.emplace_back(
-                    m_Device->createFenceUnique(fence_create_info));
+                resource.m_FrameSemaphoreValues.emplace_back(0);
             }
 
             vk::CommandBufferAllocateInfo allocate_info;
@@ -541,23 +552,16 @@ namespace YT
     {
         SubmitImageUploadCommandBuffer();
 
-        vk::Result result = vk::Result::eSuccess;
-
-        // Sync the frame
         FrameResource & frame_resource = m_FrameResources[m_FrameIndex];
 
-        result = m_Device->waitForFences(1, &frame_resource.m_Fence.get(), true, UINT64_MAX);
-        if (result != vk::Result::eSuccess)
-        {
-            FatalPrint("Failed to wait for fences: {}", vk::to_string(result));
-            return false;
-        }
+        vk::Result result = vk::Result::eSuccess;
 
-        result = m_Device->resetFences(1, &frame_resource.m_Fence.get());
+        std::uint64_t current_frame_semaphore_value = 0;
+        result = m_Device->getSemaphoreCounterValue(m_FrameSemaphore.get(), &current_frame_semaphore_value);
+
         if (result != vk::Result::eSuccess)
         {
-            FatalPrint("Failed to reset fences: {}", vk::to_string(result));
-            return false;
+            FatalPrint("Failed to get semaphore counter value");
         }
 
         m_PreRenderDelegate.Execute();
@@ -590,24 +594,18 @@ namespace YT
         for (WindowResource * resource_ptr : window_resources)
         {
             WindowResource & resource = *resource_ptr;
+            resource.m_WasRenderedThisFrame = false;
+
+            // Can't render this window because the previous frame hasn't finished
+            if (resource.m_FrameSemaphoreValues[resource.m_FrameIndex] >= current_frame_semaphore_value)
+            {
+                continue;
+            }
+
             if (resource.m_Widget)
             {
                 try
                 {
-                    result = m_Device->waitForFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get(), true, UINT64_MAX);
-                    if (result != vk::Result::eSuccess)
-                    {
-                        FatalPrint("Failed to wait for fences: {}", vk::to_string(result));
-                        return false;
-                    }
-
-                    result = m_Device->resetFences(1, &resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
-                    if (result != vk::Result::eSuccess)
-                    {
-                        FatalPrint("Failed to reset fences: {}", vk::to_string(result));
-                        return false;
-                    }
-
                     if (resource.m_RequestedExtent != resource.m_SwapChainExtent)
                     {
                         VerbosePrint("Recreating swap chain due to requested size change");
@@ -631,7 +629,7 @@ namespace YT
                         }
                     }
 
-                    if (!PrepareCommandBuffer(resource))
+                    if (!PrepareCommandBufferForPresent(resource))
                     {
                         FatalPrint("Failed to prepare command buffer");
                         return false;
@@ -651,11 +649,13 @@ namespace YT
 
                     drawer.Flush();
 
-                    if (!CompleteCommandBuffer(resource))
+                    if (!CompleteCommandBufferForPresent(resource))
                     {
                         FatalPrint("Failed to complete command buffer");
                         return false;
                     }
+
+                    resource.m_WasRenderedThisFrame = true;
                 }
                 catch (vk::SystemError& err)
                 {
@@ -677,14 +677,54 @@ namespace YT
         }
 
         // Submit everything
+        Vector<vk::CommandBufferSubmitInfo> command_buffer_submit_infos;
+        Vector<vk::SemaphoreSubmitInfo> image_avail_semaphore_wait_infos;
+        Vector<vk::SemaphoreSubmitInfo> render_finished_semaphore_signal_infos;
+
         for (WindowResource * resource_ptr : window_resources)
         {
             WindowResource & resource = *resource_ptr;
-            if (resource.m_Widget)
+            if (resource.m_WasRenderedThisFrame)
             {
-                try
+                vk::SemaphoreSubmitInfo & image_avail_submit_info = image_avail_semaphore_wait_infos.emplace_back();
+                image_avail_submit_info.setSemaphore(
+                    resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get());
+                image_avail_submit_info.setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+
+                vk::SemaphoreSubmitInfo & render_finished_submit_info = render_finished_semaphore_signal_infos.emplace_back();
+                render_finished_submit_info.setSemaphore(
+                    resource.m_RenderFinishedSemaphores[resource.m_FrameIndex].get());
+                render_finished_submit_info.setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+
+                command_buffer_submit_infos.emplace_back(resource.m_CommandBuffers[resource.m_FrameIndex].get());
+            }
+        }
+
+        vk::SemaphoreSubmitInfo & timeline_submit_info = render_finished_semaphore_signal_infos.emplace_back();
+        timeline_submit_info.setSemaphore(m_FrameSemaphore.get());
+        timeline_submit_info.setValue(m_FrameSemaphoreValue);
+        timeline_submit_info.setStageMask(vk::PipelineStageFlagBits2::eAllGraphics);
+
+        vk::SubmitInfo2 submit_info;
+        submit_info.setWaitSemaphoreInfos(image_avail_semaphore_wait_infos);
+        submit_info.setCommandBufferInfos(command_buffer_submit_infos);
+        submit_info.setSignalSemaphoreInfos(render_finished_semaphore_signal_infos);
+
+        try
+        {
+            result = m_Queue.submit2(1, &submit_info, vk::Fence());
+            if (result != vk::Result::eSuccess)
+            {
+                FatalPrint("Failed to submit command buffer submission: {}", vk::to_string(result));
+                return false;
+            }
+
+            for (WindowResource * resource_ptr : window_resources)
+            {
+                WindowResource & resource = *resource_ptr;
+                if (resource.m_WasRenderedThisFrame)
                 {
-                    if (!SubmitCommandBuffer(resource))
+                    if (!PresentWindow(resource))
                     {
                         FatalPrint("Failed to submit command buffer");
                         return false;
@@ -696,45 +736,15 @@ namespace YT
                         resource.m_FrameIndex = 0;
                     }
                 }
-                catch (vk::SystemError& err)
-                {
-                    FatalPrint("Failed to submit window: {}", err.what());
-                    return false;
-                }
-                catch (...)
-                {
-                    FatalPrint("Failed to submit window: unknown exception");
-                    return false;
-                }
             }
-        }
 
-        try
-        {
-            // Submit the frame fence
-            frame_resource.m_CommandBuffer->reset();
-
-            vk::CommandBufferBeginInfo begin_info;
-            frame_resource.m_CommandBuffer->begin(begin_info);
-
-            vk::DebugUtilsLabelEXT label_info;
-            label_info.color = std::array { 1.0f, 1.0f, 1.0f, 1.0f };
-            label_info.pLabelName = "EOF";
-            frame_resource.m_CommandBuffer->insertDebugUtilsLabelEXT(label_info);
-
-            frame_resource.m_CommandBuffer->end();
-
-            vk::PipelineStageFlags pipe_stage_flags = vk::PipelineStageFlagBits::eAllCommands;
-
-            vk::SubmitInfo submit_info;
-            submit_info.setCommandBuffers(frame_resource.m_CommandBuffer.get());
-
-            result = m_Queue.submit(1, &submit_info, frame_resource.m_Fence.get());
-            if (result != vk::Result::eSuccess)
+            // Do any queued deletes for last frame
+            for (const auto & func : frame_resource.m_DeletionCallbacks)
             {
-                FatalPrint("Failed to submit end of frame: {}", vk::to_string(result));
-                return false;
+                func();
             }
+
+            frame_resource.m_DeletionCallbacks.clear();
         }
         catch (vk::SystemError& err)
         {
@@ -747,31 +757,12 @@ namespace YT
             return false;
         }
 
+        m_FrameSemaphoreValue++;
+
         m_FrameIndex++;
         if (m_FrameIndex >= FrameResourceCount)
         {
             m_FrameIndex = 0;
-        }
-
-        try
-        {
-            // Do any queued deletes for last frame
-            for (const auto & func : frame_resource.m_DeletionCallbacks)
-            {
-                func();
-            }
-
-            frame_resource.m_DeletionCallbacks.clear();
-        }
-        catch (vk::SystemError& err)
-        {
-            FatalPrint("Exception while running queued deletes: {}", err.what());
-            return false;
-        }
-        catch (...)
-        {
-            FatalPrint("Exception while running queued deletes: unknown exception");
-            return false;
         }
 
         m_PostRenderDelegate.Execute();
@@ -1037,10 +1028,9 @@ namespace YT
         try
         {
             VerbosePrint("Creating swap chain {} {}...", resource.m_RequestedExtent.width, resource.m_RequestedExtent.height);
-            m_Device->waitIdle();
 
-            resource.m_SwapChainImageViews.clear();
-            resource.m_SwapChainImages.clear();
+            PushDeferredDeleteObjectList(resource.m_SwapChainImageViews);
+            PushDeferredDeleteObjectList(resource.m_SwapChainImages);
 
             vk::SurfaceCapabilitiesKHR surface_caps;
             if (vk::Result result = m_PhysicalDevice.getSurfaceCapabilitiesKHR(resource.m_VkSurface.get(), &surface_caps); result != vk::Result::eSuccess)
@@ -1089,8 +1079,13 @@ namespace YT
             swap_chain_create_info.preTransform = surface_caps.currentTransform;
             swap_chain_create_info.compositeAlpha = resource.m_AlphaBackground ?
                 vk::CompositeAlphaFlagBitsKHR::ePreMultiplied : vk::CompositeAlphaFlagBitsKHR::eOpaque;
-            swap_chain_create_info.clipped = VK_TRUE;
+            swap_chain_create_info.clipped = true;
             swap_chain_create_info.oldSwapchain = resource.m_SwapChain ? resource.m_SwapChain.get() : VK_NULL_HANDLE;
+
+            if (resource.m_SwapChain)
+            {
+                PushDeferredDeleteObject(resource.m_SwapChain);
+            }
 
             resource.m_SwapChain = m_Device->createSwapchainKHRUnique(swap_chain_create_info);
             resource.m_SwapChainImages = m_Device->getSwapchainImagesKHR(resource.m_SwapChain.get());
@@ -1506,7 +1501,7 @@ namespace YT
         return nullptr;
     }
 
-    bool RenderManager::PrepareCommandBuffer(const WindowResource & resource) noexcept
+    bool RenderManager::PrepareCommandBufferForPresent(const WindowResource & resource) noexcept
     {
         try
         {
@@ -1582,7 +1577,7 @@ namespace YT
         return false;
     }
 
-    bool RenderManager::CompleteCommandBuffer(const WindowResource & resource) noexcept
+    bool RenderManager::CompleteCommandBufferForPresent(const WindowResource & resource) noexcept
     {
         try
         {
@@ -1626,40 +1621,20 @@ namespace YT
         return false;
     }
 
-    bool RenderManager::SubmitCommandBuffer(const WindowResource & resource) noexcept
+    bool RenderManager::PresentWindow(const WindowResource & resource) noexcept
     {
         try
         {
-            const vk::UniqueCommandBuffer & command_buffer = resource.m_CommandBuffers[resource.m_FrameIndex];
-            std::array image_avail_semaphores = { resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get() };
             std::array render_finish_semaphores = { resource.m_RenderFinishedSemaphores[resource.m_FrameIndex].get() };
-            std::array cmd_buffers = { command_buffer.get() };
             std::array swap_chains = { resource.m_SwapChain.get() };
             std::array image_indices = { resource.m_SwapChainImageIndex };
-
-            vk::PipelineStageFlags pipe_stage_flags = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-
-            vk::SubmitInfo submit_info;
-            submit_info.setWaitSemaphores(image_avail_semaphores);
-            submit_info.setWaitDstStageMask(pipe_stage_flags);
-            submit_info.setCommandBuffers(cmd_buffers);
-            submit_info.setSignalSemaphores(render_finish_semaphores);
-
-            vk::Result result = m_Queue.submit(1, &submit_info,
-                resource.m_RenderFinishedFences[resource.m_FrameIndex].get());
-
-            if (result != vk::Result::eSuccess)
-            {
-                FatalPrint("Failed to submit command buffer submission: {}", vk::to_string(result));
-                return false;
-            }
 
             vk::PresentInfoKHR present_info;
             present_info.setWaitSemaphores(render_finish_semaphores);
             present_info.setSwapchains(swap_chains);
             present_info.setImageIndices(image_indices);
 
-            result = m_Queue.presentKHR(&present_info);
+            vk::Result result = m_Queue.presentKHR(&present_info);
 
             if (result != vk::Result::eSuccess)
             {

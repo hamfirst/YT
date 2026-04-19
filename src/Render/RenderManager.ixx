@@ -61,6 +61,7 @@ namespace YT
         void CreateLogicalDevice();
         void CreateQueue();
         void CreateCommandPool();
+        void CreateFrameSemaphore();
 
         void CreateImageDescriptorPool();
         void CreateImageDescriptorLayout();
@@ -123,9 +124,9 @@ namespace YT
         bool UpdateBufferDescriptorSetInfo() noexcept;
         [[nodiscard]] OptionalPtr<PSOVariant> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
 
-        bool PrepareCommandBuffer(const WindowResource & resource) noexcept;
-        bool CompleteCommandBuffer(const WindowResource & resource) noexcept;
-        bool SubmitCommandBuffer(const WindowResource & resource) noexcept;
+        bool PrepareCommandBufferForPresent(const WindowResource & resource) noexcept;
+        bool CompleteCommandBufferForPresent(const WindowResource & resource) noexcept;
+        bool PresentWindow(const WindowResource & resource) noexcept;
 
         bool SubmitImageUploadCommandBuffer();
 
@@ -139,6 +140,17 @@ namespace YT
         void PushDeferredDeleteObject(ObjectType && obj)
         {
             m_FrameResources[m_FrameIndex].m_DeferredDeletionObjects.emplace_back(std::forward<ObjectType>(obj));
+        }
+
+        template <typename ObjectType>
+        void PushDeferredDeleteObjectList(Vector<ObjectType> & obj_list)
+        {
+            for (ObjectType & obj : obj_list)
+            {
+                PushDeferredDeleteObject(std::move(obj));
+            }
+
+            obj_list.clear();
         }
 
     private:
@@ -211,8 +223,7 @@ namespace YT
         struct FrameResource
         {
             Vector<UniquePtr<TransientBuffer>> m_Buffers;
-            vk::UniqueCommandBuffer m_CommandBuffer;
-            vk::UniqueFence m_Fence;
+            vk::UniqueCommandBuffer m_CommandBuffer;;
 
             vk::DescriptorSet m_BufferDescriptorSet;
 
@@ -222,9 +233,10 @@ namespace YT
 
         static constexpr int FrameResourceCount = 3;
         std::array<FrameResource, FrameResourceCount> m_FrameResources;
-        std::uint32_t m_FrameIndex = 0;
+        std::uint64_t m_FrameIndex = 0;
 
-        ObjectPool<vk::UniqueSemaphore> m_SemaphorePool;
+        vk::UniqueSemaphore m_FrameSemaphore;
+        std::uint64_t m_FrameSemaphoreValue = 0;
     };
 
 

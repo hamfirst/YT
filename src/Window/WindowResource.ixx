@@ -36,7 +36,7 @@ namespace YT
         Vector<vk::UniqueImageView> m_SwapChainImageViews;
         Vector<vk::UniqueSemaphore> m_ImageAvailableSemaphores;
         Vector<vk::UniqueSemaphore> m_RenderFinishedSemaphores;
-        Vector<vk::UniqueFence> m_RenderFinishedFences;
+        Vector<std::uint64_t> m_FrameSemaphoreValues;
         Vector<vk::UniqueCommandBuffer> m_CommandBuffers;
 
         vk::Extent2D m_RequestedExtent = {};
@@ -45,6 +45,7 @@ namespace YT
 
         bool m_WantsRedraw : 1 = false;
         bool m_AlphaBackground : 1 = false;
+        bool m_WasRenderedThisFrame : 1 = false;
 
         WidgetRef<WidgetBase> m_Widget;
         Delegate<bool()> m_OnCloseCallback;
