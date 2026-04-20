@@ -44,4 +44,6 @@ namespace YT
     export [[nodiscard]] MaybeInvalid<ImageReference> LoadImageFromData(const Span<std::byte>& image_data) noexcept;
     export [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromNativeHandle(
         void * native_handle, std::uint32_t width, std::uint32_t height) noexcept;
+
+    export [[nodiscard]] double GetApplicationTime() noexcept;
 }

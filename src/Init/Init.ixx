@@ -3,6 +3,7 @@ module;
 //import_std
 #include <exception>
 #include <iostream>
+#include <chrono>
 
 export module YT:Init;
 
@@ -16,4 +17,5 @@ namespace YT
 
     export void Cleanup() noexcept;
 
+    export std::chrono::time_point<std::chrono::high_resolution_clock> g_InitTime;
 }

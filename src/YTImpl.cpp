@@ -5,9 +5,11 @@ module;
 #include <cstdint>
 #include <cstddef>
 #include <memory>
+#include <chrono>
 
 module YT:Impl;
 
+import :Init;
 import :RenderManager;
 
 namespace YT
@@ -20,5 +22,10 @@ namespace YT
     MaybeInvalid<PSOHandle> CreatePSO(const PSOCreateInfo & create_info) noexcept
     {
         return g_RenderManager->RegisterPSO(create_info);
+    }
+
+    double GetApplicationTime() noexcept
+    {
+        return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - g_InitTime).count();
     }
 }

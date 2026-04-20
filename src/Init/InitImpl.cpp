@@ -1,10 +1,12 @@
 module;
 
 #include <memory>
+#include <chrono>
 
 module YT:InitImpl;
 
 import :Types;
+import :Init;
 import :JobManager;
 import :WindowManager;
 import :RenderManager;
@@ -14,6 +16,8 @@ namespace YT
 {
     bool Init(const ApplicationInitInfo& init_info) noexcept
     {
+        g_InitTime = std::chrono::high_resolution_clock::now();
+
         if (!JobManager::CreateJobManager())
         {
             return false;

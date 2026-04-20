@@ -214,6 +214,7 @@ namespace YT
 #endif
         instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
         instance_extension_names.push_back(g_WindowManager->GetSurfaceExtensionName());
+        instance_extension_names.push_back(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
         vk::InstanceCreateInfo create_info(
             vk::InstanceCreateFlags(),
             &application_info,
@@ -268,8 +269,7 @@ namespace YT
         m_RequiredExtensions =
         {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
-            VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+            VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
             VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
@@ -1084,7 +1084,7 @@ namespace YT
 
             if (resource.m_SwapChain)
             {
-                PushDeferredDeleteObject(resource.m_SwapChain);
+                PushDeferredDeleteObject(std::move(resource.m_SwapChain));
             }
 
             resource.m_SwapChain = m_Device->createSwapchainKHRUnique(swap_chain_create_info);
