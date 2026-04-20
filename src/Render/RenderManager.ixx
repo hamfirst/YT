@@ -106,10 +106,12 @@ namespace YT
 
         [[nodiscard]] MaybeInvalid<ImageReference> CreateImage(const Span<const std::byte>& image_file_data) noexcept;
         [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromPixels(
-            const Span<const std::byte>& data, std::uint32_t width, std::uint32_t height) noexcept;
+            const Span<const std::byte>& data, std::uint32_t width, std::uint32_t height, ImageFormat format) noexcept;
 
         [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromNativeHandle(
             std::uint64_t native_handle, std::uint32_t width, std::uint32_t height) noexcept;
+
+        void FinalizeDeferredImageLoad() noexcept;
         void DestroyImage(ImageHandle handle) noexcept;
 
         void RegisterRenderGlobals();

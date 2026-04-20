@@ -25,7 +25,12 @@ namespace YT
         default:
         case ImageFormat::R8G8B8A8Unorm:
             return vk::Format::eR8G8B8A8Unorm;
-            break;
+        case ImageFormat::R8G8B8Unorm:
+            return vk::Format::eR8G8B8Unorm;
+        case ImageFormat::R8G8Unorm:
+            return vk::Format::eR8G8Unorm;
+        case ImageFormat::R8Unorm:
+            return vk::Format::eR8Unorm;
         }
     }
 
@@ -115,8 +120,6 @@ namespace YT
             post_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eTransferWrite;
             post_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTransfer;
             post_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader;
-
-            //staging_buffer.Transfer(command_buffer, *m_Image, width, height);
         }
 
         ImageBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator,

@@ -10,6 +10,7 @@ export module YT;
 
 export import :Types;
 export import :BlockTable;
+export import :FixedBlockAllocator;
 export import :Init;
 export import :Delegate;
 export import :Window;
@@ -18,6 +19,7 @@ export import :Drawer;
 export import :RenderTypes;
 export import :RenderReflect;
 export import :ImageReference;
+export import :DeferredImageLoad;
 export import :WindowTypes;
 export import :JobManager;
 

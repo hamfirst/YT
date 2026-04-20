@@ -32,6 +32,13 @@ public:
     };
 };
 
+unsigned char TestImageData[] =
+{
+#embed "cs-black-000.png"
+};
+
+auto TestDeferredImage = LoadDeferredImageEmbedded(TestImageData);
+
 int main()
 {
     ApplicationInitInfo init_info

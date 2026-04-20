@@ -14,6 +14,7 @@ module;
 #include <atomic>
 #include <chrono>
 #include <ratio>
+#include <format>
 #include <iostream>
 
 #include <gsl/gsl>
@@ -39,6 +40,7 @@ import :WindowResource;
 import :WindowManager;
 import :RenderManager;
 import :RenderReflect;
+import :DeferredImageLoad;
 import :Drawer;
 
 VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
@@ -97,6 +99,7 @@ namespace YT
         try
         {
             g_RenderManager = std::make_unique<RenderManager>(init_info);
+            g_RenderManager->FinalizeDeferredImageLoad();
             return true;
         }
         catch (const Exception & e)
@@ -215,6 +218,7 @@ namespace YT
         instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
         instance_extension_names.push_back(g_WindowManager->GetSurfaceExtensionName());
         instance_extension_names.push_back(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+        instance_extension_names.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
         vk::InstanceCreateInfo create_info(
             vk::InstanceCreateFlags(),
             &application_info,
@@ -355,6 +359,7 @@ namespace YT
         device_features12.runtimeDescriptorArray = true;
         device_features12.descriptorBindingPartiallyBound = true;
         device_features12.descriptorBindingSampledImageUpdateAfterBind = true;
+        device_features12.descriptorBindingVariableDescriptorCount = true;
         device_features12.bufferDeviceAddress = true;
         device_features12.timelineSemaphore = true;
         device_features11.pNext = &device_features12;
@@ -949,23 +954,25 @@ namespace YT
             }
         });
 
-        if (!pixels || tex_channels != STBI_rgb_alpha)
+        if (!pixels)
         {
             return {};
         }
 
+        ImageFormat format = ImageFormat::R8G8B8A8Unorm;
         return CreateImageFromPixels(Span(reinterpret_cast<std::byte *>(pixels),
-            tex_width * tex_height * 4), tex_width, tex_height);
+            tex_width * tex_height * 4), tex_width, tex_height, format);
     }
 
     MaybeInvalid<ImageReference> RenderManager::CreateImageFromPixels(const Span<const std::byte>& data,
-        std::uint32_t width, std::uint32_t height) noexcept
+        std::uint32_t width, std::uint32_t height, ImageFormat format) noexcept
     {
         try
         {
-            if (data.size() != width * height * 4)
+            if (data.size() != width * height * GetBytesPerPixel(format))
             {
                 FatalPrint("Image buffer not providing the correct number of bytes");
+                return {};
             }
 
             UniquePtr<StagingBuffer> staging_buffer =
@@ -974,7 +981,7 @@ namespace YT
 
             auto handle = m_ImageTable.AllocateHandle(m_Device, m_Allocator,
                 m_ImagePreTransferMemoryBarriers, m_ImagePostTransferMemoryBarriers,
-                width, height, ImageFormat::R8G8B8A8Unorm);
+                width, height, format);
 
             auto image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
             uint32_t image_index = image_handle.m_BlockIndex * ImageTable::BlockSizeValue + image_handle.m_ElemIndex;
@@ -1010,6 +1017,16 @@ namespace YT
         uint32_t image_index = image_handle.m_BlockIndex * ImageTable::BlockSizeValue + image_handle.m_ElemIndex;
 
         return { image_handle, width, height, image_index };
+    }
+
+    void RenderManager::FinalizeDeferredImageLoad() noexcept
+    {
+        DeferredImageLoad * deferred_image_load = g_DeferredImageLoadHead;
+        while (deferred_image_load)
+        {
+            deferred_image_load->Finalize();
+            deferred_image_load = deferred_image_load->m_Next;
+        }
     }
 
     void RenderManager::DestroyImage(ImageHandle handle) noexcept

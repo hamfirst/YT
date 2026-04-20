@@ -58,6 +58,8 @@ set(YT_MODULE_SOURCES
         src/Job/JobManagerImpl.cpp
 
         src/Render/DeferredDelete.ixx
+        src/Render/DeferredImageLoad.ixx
+        src/Render/DeferredImageLoadImpl.cpp
         src/Render/Drawer.ixx
         src/Render/DrawerImpl.cpp
         src/Render/ImageBuffer.ixx

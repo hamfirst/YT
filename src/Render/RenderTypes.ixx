@@ -22,7 +22,27 @@ namespace YT
     export enum class ImageFormat
     {
         R8G8B8A8Unorm,
+        R8G8B8Unorm,
+        R8G8Unorm,
+        R8Unorm,
     };
+
+    export int GetBytesPerPixel(ImageFormat format)
+    {
+        switch (format)
+        {
+            case ImageFormat::R8G8B8A8Unorm:
+                return 4;
+            case ImageFormat::R8G8B8Unorm:
+                return 3;
+            case ImageFormat::R8G8Unorm:
+                return 2;
+            case ImageFormat::R8Unorm:
+                return 1;
+        }
+
+        return 4;
+    }
 
     export enum class ShaderType
     {
