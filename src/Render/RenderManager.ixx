@@ -130,7 +130,7 @@ namespace YT
         bool CompleteCommandBufferForPresent(const WindowResource & resource) noexcept;
         bool PresentWindow(const WindowResource & resource) noexcept;
 
-        bool SubmitImageUploadCommandBuffer();
+        bool SubmitImageUploadCommandBuffer() noexcept;
 
         template <typename Callback>
         void PushDeferredDeleteCallback(Callback && callback)
@@ -200,10 +200,10 @@ namespace YT
         std::size_t m_BufferDescriptorSetId = 0;
 
         // Images
-        static constexpr std::size_t MaxImageDescriptors = 100000;
+        static constexpr std::size_t MaxImageDescriptors = 10000;
         vk::UniqueDescriptorSetLayout m_ImageDescriptorSetLayout;
         vk::UniqueDescriptorPool m_ImageDescriptorPool;
-        vk::DescriptorSet m_ImageDescriptorSet;
+        vk::UniqueDescriptorSet m_ImageDescriptorSet;
 
         ImageTable m_ImageTable;
 

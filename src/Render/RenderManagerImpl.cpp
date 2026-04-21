@@ -216,7 +216,7 @@ namespace YT
         instance_extension_names.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
         instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-        instance_extension_names.push_back(g_WindowManager->GetSurfaceExtensionName());
+        instance_extension_names.push_back(WindowManager::GetSurfaceExtensionName());
         instance_extension_names.push_back(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
         instance_extension_names.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
         vk::InstanceCreateInfo create_info(
@@ -331,8 +331,8 @@ namespace YT
             throw Exception("No physical device found");
         }
 
-        VerbosePrint("Found valid device: {} - {}", best_physical_device->getProperties().deviceName.data(),
-            best_queue_index.value());
+        VerbosePrint(LogType::RenderManager, "Found valid device: {} - {}",
+            best_physical_device->getProperties().deviceName.data(), best_queue_index.value());
 
         m_PhysicalDevice = best_physical_device.value();
         m_BestQueueIndex = best_queue_index.value();
@@ -414,7 +414,7 @@ namespace YT
         // create the image pool
         std::array descriptor_pool_sizes =
         {
-            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MaxImageDescriptors)
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MaxImageDescriptors + 1)
         };
 
         vk::DescriptorPoolCreateInfo descriptor_pool_create_info;
@@ -430,7 +430,7 @@ namespace YT
         std::array image_set_bindings =
         {
             vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eCombinedImageSampler,
-                MaxImageDescriptors, vk::ShaderStageFlagBits::eFragment)
+                1000000, vk::ShaderStageFlagBits::eFragment)
         };
 
         std::array image_set_binding_flags =
@@ -457,14 +457,22 @@ namespace YT
             m_ImageDescriptorSetLayout.get(),
         };
 
+        std::uint32_t actual_descriptor_count = MaxImageDescriptors;
+
+        vk::DescriptorSetVariableDescriptorCountAllocateInfo variable_descriptor_count_allocate_info;
+        variable_descriptor_count_allocate_info.setDescriptorSetCount(1);
+        variable_descriptor_count_allocate_info.setPDescriptorCounts(&actual_descriptor_count);
+
         vk::DescriptorSetAllocateInfo descriptor_set_allocate_info;
         descriptor_set_allocate_info.descriptorPool = m_ImageDescriptorPool.get();
+        descriptor_set_allocate_info.setDescriptorSetCount(1);
         descriptor_set_allocate_info.setSetLayouts(descriptor_set_layouts);
+        descriptor_set_allocate_info.pNext = &variable_descriptor_count_allocate_info;
 
-        auto descriptor_sets = m_Device->allocateDescriptorSets(
+        auto descriptor_sets = m_Device->allocateDescriptorSetsUnique(
             descriptor_set_allocate_info);
 
-        m_ImageDescriptorSet = descriptor_sets.front();
+        m_ImageDescriptorSet = std::move(descriptor_sets.front());
     }
 
     void RenderManager::CreateVideoMemoryAllocator()
@@ -613,7 +621,7 @@ namespace YT
                 {
                     if (resource.m_RequestedExtent != resource.m_SwapChainExtent)
                     {
-                        VerbosePrint("Recreating swap chain due to requested size change");
+                        VerbosePrint(LogType::RenderManager, "Recreating swap chain due to requested size change");
                         if (!UpdateWindowResource(resource))
                         {
                             FatalPrint("Failed to update swap chain due to requested size");
@@ -626,7 +634,7 @@ namespace YT
 
                     if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
                     {
-                        VerbosePrint("Recreating swap chain due to vulkan response");
+                        VerbosePrint(LogType::RenderManager, "Recreating swap chain due to vulkan response");
                         if (!UpdateWindowResource(resource))
                         {
                             FatalPrint("Failed to update swap chain due to vulkan response");
@@ -1044,7 +1052,7 @@ namespace YT
     {
         try
         {
-            VerbosePrint("Creating swap chain {} {}...", resource.m_RequestedExtent.width, resource.m_RequestedExtent.height);
+            VerbosePrint(LogType::RenderManager, "Creating swap chain {} {}...", resource.m_RequestedExtent.width, resource.m_RequestedExtent.height);
 
             PushDeferredDeleteObjectList(resource.m_SwapChainImageViews);
             PushDeferredDeleteObjectList(resource.m_SwapChainImages);
@@ -1672,7 +1680,7 @@ namespace YT
         return false;
     }
 
-    bool RenderManager::SubmitImageUploadCommandBuffer()
+    bool RenderManager::SubmitImageUploadCommandBuffer() noexcept
     {
         if (m_ImageTransferInfos.empty())
         {
@@ -1704,61 +1712,100 @@ namespace YT
         assert(m_ImageTransferInfos.size() == m_ImagePreTransferMemoryBarriers.size());
         assert(m_ImageTransferInfos.size() == m_ImagePostTransferMemoryBarriers.size());
 
-        // Get a command buffer
-        vk::CommandBufferAllocateInfo allocate_info;
-        allocate_info.commandPool = m_CommandPool.get();
-        allocate_info.level = vk::CommandBufferLevel::ePrimary;
-        allocate_info.commandBufferCount = 1;
-
-        auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
-        m_ImageUploadCommandBuffer = std::move(buffer_list.front());
-
-        vk::CommandBufferBeginInfo begin_info;
-        m_ImageUploadCommandBuffer->begin(begin_info);
-
-        // Pre transfer pipeline barriers
-        vk::DependencyInfo dep_info;
-        dep_info.setImageMemoryBarriers(m_ImagePreTransferMemoryBarriers);
-        m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
-
-        // Transfer
-        for (std::size_t index = 0; index < m_ImageTransferInfos.size(); index++)
+        try
         {
-            m_ImageTransferStagingBuffers[index]->Transfer(m_ImageUploadCommandBuffer.get(),
-                m_ImageTransferInfos[index].m_Image,
-                m_ImageTransferInfos[index].m_Width, m_ImageTransferInfos[index].m_Height);
+            // Get a command buffer
+            vk::CommandBufferAllocateInfo allocate_info;
+            allocate_info.commandPool = m_CommandPool.get();
+            allocate_info.level = vk::CommandBufferLevel::ePrimary;
+            allocate_info.commandBufferCount = 1;
 
-            PushDeferredDeleteObject(std::move(m_ImageTransferStagingBuffers[index]));
+            auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
+            m_ImageUploadCommandBuffer = std::move(buffer_list.front());
+
+            vk::CommandBufferBeginInfo begin_info;
+            m_ImageUploadCommandBuffer->begin(begin_info);
+
+            // Pre transfer pipeline barriers
+            vk::DependencyInfo dep_info;
+            dep_info.setImageMemoryBarriers(m_ImagePreTransferMemoryBarriers);
+            m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
+
+            // Transfer
+            for (std::size_t index = 0; index < m_ImageTransferInfos.size(); index++)
+            {
+                m_ImageTransferStagingBuffers[index]->Transfer(m_ImageUploadCommandBuffer.get(),
+                    m_ImageTransferInfos[index].m_Image,
+                    m_ImageTransferInfos[index].m_Width, m_ImageTransferInfos[index].m_Height);
+
+                PushDeferredDeleteObject(std::move(m_ImageTransferStagingBuffers[index]));
+            }
+
+            // Post transfer pipeline barriers
+            dep_info.setImageMemoryBarriers(m_ImagePostTransferMemoryBarriers);
+            m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
+
+            m_ImageUploadCommandBuffer->end();
+
+            vk::CommandBufferSubmitInfo command_buffer_submit_info;
+            command_buffer_submit_info.setCommandBuffer(m_ImageUploadCommandBuffer.get());
+
+            std::array command_buffer_submit_infos{ command_buffer_submit_info };
+
+            vk::SubmitInfo2 submit_info;
+            submit_info.setCommandBufferInfos(command_buffer_submit_infos);
+
+            vk::Result result = m_Queue.submit2(1, &submit_info, vk::Fence());
+            PushDeferredDeleteObject(std::move(m_ImageUploadCommandBuffer));
+
+            Vector<vk::DescriptorImageInfo> image_infos;
+            Vector<vk::WriteDescriptorSet> write_sets;
+            Vector<vk::CopyDescriptorSet> copy_sets;
+
+            for (std::size_t index = 0; index < m_ImageTransferInfos.size(); index++)
+            {
+                ImageHandle handle = m_ImageTransferInfos[index].m_ImageHandle;
+                if (ImageBuffer * image = m_ImageTable.ResolveHandle(handle))
+                {
+                    std::uint32_t descriptor_index = ImageTable::GetHandleIndex(handle);
+                    vk::DescriptorImageInfo & image_info = image_infos.emplace_back();
+                    image_info.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+                    image_info.setImageView(image->GetImageView());
+                    image_info.setSampler(image->GetSampler());
+
+                    vk::WriteDescriptorSet & descriptor_write = write_sets.emplace_back();
+                    descriptor_write.setDstSet(m_ImageDescriptorSet.get());
+                    descriptor_write.setDstBinding(0);
+                    descriptor_write.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+                    descriptor_write.setDstArrayElement(descriptor_index);
+                    descriptor_write.setDescriptorCount(1);
+                    descriptor_write.setPImageInfo(&image_info);
+                }
+            }
+
+            m_Device->updateDescriptorSets(write_sets, copy_sets);
+
+            m_ImageTransferInfos.clear();
+            m_ImageTransferStagingBuffers.clear();
+            m_ImagePreTransferMemoryBarriers.clear();
+            m_ImagePostTransferMemoryBarriers.clear();
+
+            if (result != vk::Result::eSuccess)
+            {
+                FatalPrint("Failed to submit image upload command buffer");
+            }
+
+            return true;
         }
-
-        // Post transfer pipeline barriers
-        dep_info.setImageMemoryBarriers(m_ImagePostTransferMemoryBarriers);
-        m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
-
-        m_ImageUploadCommandBuffer->end();
-
-        vk::CommandBufferSubmitInfo command_buffer_submit_info;
-        command_buffer_submit_info.setCommandBuffer(m_ImageUploadCommandBuffer.get());
-
-        std::array command_buffer_submit_infos{ command_buffer_submit_info };
-
-        vk::SubmitInfo2 submit_info;
-        submit_info.setCommandBufferInfos(command_buffer_submit_infos);
-
-        vk::Result result = m_Queue.submit2(1, &submit_info, vk::Fence());
-        PushDeferredDeleteObject(std::move(m_ImageUploadCommandBuffer));
-
-        m_ImageTransferInfos.clear();
-        m_ImageTransferStagingBuffers.clear();
-        m_ImagePreTransferMemoryBarriers.clear();
-        m_ImagePostTransferMemoryBarriers.clear();
-
-        if (result != vk::Result::eSuccess)
+        catch (vk::SystemError& err)
         {
-            FatalPrint("Failed to submit image upload command buffer");
+            FatalPrint("Failed to submit command buffer: {}", err.what());
         }
-
-        return true;
+        catch (...)
+        {
+            FatalPrint("Failed to submit command buffer: unknown exception");
+        }
+        return false;
     }
 
-    } // namespace YT
+} // namespace YT

@@ -116,10 +116,12 @@ namespace YT
             post_memory_barrier.subresourceRange.levelCount = 1;
             post_memory_barrier.subresourceRange.baseArrayLayer = 0;
             post_memory_barrier.subresourceRange.layerCount = 1;
-            post_memory_barrier.srcAccessMask = {};
-            post_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eTransferWrite;
+            post_memory_barrier.srcAccessMask = vk::AccessFlagBits2::eTransferWrite;
+            post_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eShaderRead;
             post_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTransfer;
             post_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader;
+
+            CreateSampler();
         }
 
         ImageBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator,
@@ -143,6 +145,8 @@ namespace YT
             {
                 throw Exception("Could not create image view");
             }
+
+            CreateSampler();
         }
 
         ImageBuffer(const ImageBuffer&) = delete;
@@ -161,6 +165,11 @@ namespace YT
             return m_ImageView.get();
         }
 
+        [[nodiscard]] vk::Sampler GetSampler() const noexcept
+        {
+            return m_Sampler.get();
+        }
+
         [[nodiscard]] std::uint32_t GetWidth() const noexcept
         {
             return m_Width;
@@ -177,12 +186,28 @@ namespace YT
         }
 
     private:
+
+        void CreateSampler()
+        {
+            vk::SamplerCreateInfo sampler_info;
+            sampler_info.setMagFilter(vk::Filter::eLinear);
+            sampler_info.setMinFilter(vk::Filter::eLinear);
+            sampler_info.setAddressModeU(vk::SamplerAddressMode::eRepeat);
+            sampler_info.setAddressModeV(vk::SamplerAddressMode::eRepeat);
+            sampler_info.setAnisotropyEnable(false);
+            sampler_info.setMipmapMode(vk::SamplerMipmapMode::eLinear);
+
+            m_Sampler = m_Device->createSamplerUnique(sampler_info);
+        }
+
+    private:
         vk::UniqueDevice & m_Device;
         vma::UniqueAllocator & m_Allocator;
         vma::UniqueImage m_Image;
         vk::Image m_NonOwningImage;
         vk::UniqueImageView m_ImageView;
         vma::UniqueAllocation m_Allocation;
+        vk::UniqueSampler m_Sampler;
 
         std::uint32_t m_Width = 0;
         std::uint32_t m_Height = 0;

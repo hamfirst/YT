@@ -499,6 +499,22 @@ namespace YT
                 }
             }
         }
+
+        /**
+         * @brief Converts a handle's block/element coordinates into a linear index.
+         *
+         * The returned value is equivalent to flattening the 2D `(block, element)` location
+         * into a single contiguous index in a conceptual array of `BlockCount * BlockSize`.
+         * This helper does not validate generation or allocation state; callers should only
+         * use it for indexing/ordering operations where the handle coordinates are meaningful.
+         *
+         * @param handle The handle whose location should be flattened.
+         * @return Linear index computed as `block_index * BlockSize + element_index`.
+         */
+        static std::uint32_t GetHandleIndex(BlockTableHandle handle) noexcept
+        {
+            return (handle.m_BlockIndex * BlockSize) + handle.m_ElemIndex;
+        }
     private:
 
         bool AllocateSlot(UniquePtr<Block> & block, int element_index) noexcept

@@ -103,10 +103,17 @@ namespace YT
         std::println(format, std::forward<Args>(args)...);
     }
 
-    export template <typename... Args>
-    void VerbosePrint(std::format_string<Args...> format, Args&&... args)
+    export enum class LogType
     {
-        std::println(format, std::forward<Args>(args)...);
+        WindowManager,
+        RenderManager,
+        ShaderBuilder,
+    };
+
+    export template <typename... Args>
+    void VerbosePrint(LogType log_type, std::format_string<Args...> format, Args&&... args)
+    {
+        //std::println(format, std::forward<Args>(args)...);
     }
 
     export template <typename... Args>

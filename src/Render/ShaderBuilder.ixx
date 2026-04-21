@@ -192,7 +192,7 @@ namespace YT
 							return false;
 						}
 
-						VerbosePrint("Include code {}\n", include_code);
+						VerbosePrint(LogType::ShaderBuilder, "Include code {}\n", include_code);
 
 						result.append(include_code);
 						result.append(remainder);
@@ -221,7 +221,7 @@ namespace YT
 		                      Vector<std::uint8_t> & out_spirv,
 		                      const Optional<String> & entry_point)
 		{
-			VerbosePrint("Compiling shader:\n{}", shader_code);
+			VerbosePrint(LogType::ShaderBuilder, "Compiling shader:\n{}", shader_code);
 
 			EShLanguage stage = FindLanguage(shader_type);
 			glslang::TShader shader(stage);

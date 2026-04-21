@@ -387,12 +387,12 @@ namespace YT
     {
         auto * self = static_cast<WindowManager *>(data);
 
-        VerbosePrint("interface: '{}', version: {}, name: {}",
+        VerbosePrint(LogType::WindowManager, "interface: '{}', version: {}, name: {}",
                      interface, version, name);
 
         if (strcmp(interface, wl_compositor_interface.name) == 0)
         {
-            VerbosePrint("registering wl_compositor");
+            VerbosePrint(LogType::WindowManager, "registering wl_compositor");
             self->m_Compositor = static_cast<wl_compositor *>(
                 wl_registry_bind(self->m_Registry, name, &wl_compositor_interface, 4));
 
@@ -403,7 +403,7 @@ namespace YT
         }
         else if (strcmp(interface, xdg_wm_base_interface.name) == 0)
         {
-            VerbosePrint("registering xdg_wm_base");
+            VerbosePrint(LogType::WindowManager, "registering xdg_wm_base");
             self->m_Shell = static_cast<xdg_wm_base *>(wl_registry_bind(registry, name, &xdg_wm_base_interface, 1));
 
             if (!self->m_Shell)
@@ -422,12 +422,12 @@ namespace YT
 
     void WindowManager::HandleGlobalRemove(void * data, wl_registry * registry, uint32_t name) noexcept
     {
-        VerbosePrint("Global remove: {}", name);
+        VerbosePrint(LogType::WindowManager, "Global remove: {}", name);
     }
 
     void WindowManager::HandleShellPing(void * data, struct xdg_wm_base * shell, std::uint32_t serial) noexcept
     {
-        VerbosePrint("Ping: {}", serial);
+        VerbosePrint(LogType::WindowManager, "Ping: {}", serial);
         xdg_wm_base_pong(shell, serial);
     }
 
@@ -453,14 +453,14 @@ namespace YT
 
     void WindowManager::HandleShellSurfaceConfigure(void * data, struct xdg_surface * shell_surface, std::uint32_t serial) noexcept
     {
-        VerbosePrint("Shell surface configure: {}", serial);
+        VerbosePrint(LogType::WindowManager, "Shell surface configure: {}", serial);
         xdg_surface_ack_configure(shell_surface, serial);
     }
 
     void WindowManager::HandleToplevelConfigure(void * data, struct xdg_toplevel * toplevel,
                                                 std::int32_t width, std::int32_t height, struct wl_array * states) noexcept
     {
-        VerbosePrint("Top level configure: {} {}", width, height);
+        VerbosePrint(LogType::WindowManager, "Top level configure: {} {}", width, height);
         WindowHandleData handle = WindowHandleData::CreateFromPtr(data);
         if (WindowResource* resource = g_WindowManager->m_WindowTable->ResolveHandle(handle))
         {
@@ -473,7 +473,7 @@ namespace YT
 
     void WindowManager::HandleToplevelClose(void * data, struct xdg_toplevel * toplevel) noexcept
     {
-        VerbosePrint("Close");
+        VerbosePrint(LogType::WindowManager, "Close");
         WindowHandleData handle = WindowHandleData::CreateFromPtr(data);
         if (WindowResource* resource = g_WindowManager->m_WindowTable->ResolveHandle(handle))
         {
