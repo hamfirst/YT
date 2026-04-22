@@ -41,6 +41,7 @@ namespace YT
 #embed "../../shaders/Quad/Footer.qfrag"
     };
 
+
     bool QuadRender::CreateQuadRender(const ApplicationInitInfo & init_info) noexcept
     {
         try

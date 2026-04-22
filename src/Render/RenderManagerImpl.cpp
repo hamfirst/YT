@@ -881,10 +881,16 @@ namespace YT
             }
         }
 
-        vk::DescriptorSet descriptor_set = m_FrameResources[m_FrameIndex].m_BufferDescriptorSet;
+        std::array descriptor_sets =
+        {
+            m_FrameResources[m_FrameIndex].m_BufferDescriptorSet,
+            m_ImageDescriptorSet.get()
+        };
+
+        std::array<std::uint32_t, 0> dynamic_offset = {};
+
         command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-            target_variant->m_Layout.get(), 0, 1,
-            &descriptor_set, 0, nullptr);
+            target_variant->m_Layout.get(), 0, descriptor_sets, dynamic_offset);
 
         if (push_data_size > 0 && push_data != nullptr)
         {
@@ -1029,6 +1035,12 @@ namespace YT
 
     void RenderManager::FinalizeDeferredImageLoad() noexcept
     {
+        std::array<unsigned char, 4> white_texture_data = { 255, 255, 255, 255 };
+        m_WhiteImage = CreateImageFromPixels(CreateByteSpan(white_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+
+        std::array<unsigned char, 4> black_texture_data = { 0, 0, 0, 255 };
+        m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+
         DeferredImageLoad * deferred_image_load = g_DeferredImageLoadHead;
         while (deferred_image_load)
         {
@@ -1351,6 +1363,7 @@ namespace YT
             std::array descriptor_set_layouts =
             {
                 m_BufferDescriptorSetLayout.get(),
+                m_ImageDescriptorSetLayout.get(),
             };
 
             std::array push_constant_ranges =
@@ -1759,7 +1772,9 @@ namespace YT
             PushDeferredDeleteObject(std::move(m_ImageUploadCommandBuffer));
 
             Vector<vk::DescriptorImageInfo> image_infos;
+            image_infos.reserve(m_ImageTransferInfos.size());
             Vector<vk::WriteDescriptorSet> write_sets;
+            write_sets.reserve(m_ImageTransferInfos.size());
             Vector<vk::CopyDescriptorSet> copy_sets;
 
             for (std::size_t index = 0; index < m_ImageTransferInfos.size(); index++)

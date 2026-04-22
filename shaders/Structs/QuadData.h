@@ -10,6 +10,6 @@ struct QuadData
     vec4 m_Color;
 
     uint m_Mode;
-    uint m_Flags;
+    uint m_Texture;
     uint64_t m_ExtraData;
 };

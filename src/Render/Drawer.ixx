@@ -14,6 +14,7 @@ export module YT:Drawer;
 
 import :Types;
 import :RenderTypes;
+import :ImageReference;
 
 namespace YT
 {
@@ -25,7 +26,9 @@ namespace YT
 
         void DrawRaw(PSOHandle pso_handle, std::uint32_t num_verts) noexcept;
 
-        void DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color) noexcept;
+        static const ImageReference & GetDefaultImageReference() noexcept;
+
+        void DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color, const ImageReference & image_reference = GetDefaultImageReference()) noexcept;
 
         void Flush() noexcept;
     private:

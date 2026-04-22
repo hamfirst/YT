@@ -20,24 +20,25 @@ import YT;
 
 using namespace YT;
 
-class TestWidget : public Widget<TestWidget>
-{
-public:
-    virtual void OnDraw(YT::Drawer & drawer) override
-    {
-        double t = GetApplicationTime();
-        drawer.DrawQuad(glm::vec2(0, 0 + glm::sin(t) * 100), glm::vec2(100, 100), glm::vec4(1, 0, 0, 1));
-        drawer.DrawQuad(glm::vec2(50, 50), glm::vec2(100, 100), glm::vec4(1, 1, 1, 1));
-        drawer.DrawQuad(glm::vec2(100, 100), glm::vec2(100, 100), glm::vec4(0, 0, 1, 1));
-    };
-};
-
 unsigned char TestImageData[] =
 {
 #embed "cs-black-000.png"
 };
 
 auto TestDeferredImage = LoadDeferredImageEmbedded(TestImageData);
+
+
+class TestWidget : public Widget<TestWidget>
+{
+public:
+    virtual void OnDraw(YT::Drawer & drawer) override
+    {
+        double t = GetApplicationTime();
+        drawer.DrawQuad(glm::vec2(0, 0 + glm::sin(t) * 100), glm::vec2(100, 100), glm::vec4(1, 0, 0, 1), TestDeferredImage);
+        drawer.DrawQuad(glm::vec2(50, 50), glm::vec2(100, 100), glm::vec4(1, 1, 1, 1));
+        drawer.DrawQuad(glm::vec2(100, 100), glm::vec2(100, 100), glm::vec4(0, 0, 1, 1));
+    };
+};
 
 int main()
 {

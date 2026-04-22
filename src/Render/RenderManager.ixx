@@ -114,6 +114,9 @@ namespace YT
         void FinalizeDeferredImageLoad() noexcept;
         void DestroyImage(ImageHandle handle) noexcept;
 
+        [[nodiscard]] const ImageReference & GetWhiteImageReference() const noexcept { return m_WhiteImage; }
+        [[nodiscard]] const ImageReference & GetBlackImageReference() const noexcept { return m_BlackImage; }
+
         void RegisterRenderGlobals();
 
 
@@ -206,6 +209,8 @@ namespace YT
         vk::UniqueDescriptorSet m_ImageDescriptorSet;
 
         ImageTable m_ImageTable;
+        ImageReference m_WhiteImage;
+        ImageReference m_BlackImage;
 
         struct ImageTransferInfo
         {

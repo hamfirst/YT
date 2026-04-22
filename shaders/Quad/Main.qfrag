@@ -6,7 +6,7 @@ void main()
     switch(quad_data.m_Mode)
     {
         default:
-            o_color = quad_data.m_Color;
+            o_color = texture(textures[quad_data.m_Texture], v_tx) * quad_data.m_Color;
             return;
 
         // case statements filled in dynamically

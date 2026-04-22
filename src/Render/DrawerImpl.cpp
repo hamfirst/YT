@@ -12,6 +12,8 @@ module;
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 
+#include "glm/vec2.hpp"
+
 import glm;
 
 module YT:DrawerImpl;
@@ -42,7 +44,12 @@ namespace YT
         }
     }
 
-    void Drawer::DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color) noexcept
+    const ImageReference & Drawer::GetDefaultImageReference() noexcept
+    {
+        return g_RenderManager->GetWhiteImageReference();
+    }
+
+    void Drawer::DrawQuad(glm::vec2 start, glm::vec2 size, glm::vec4 color, const ImageReference & image_reference) noexcept
     {
         FlushIfNeeded(DrawType::Quad);
 
@@ -53,7 +60,10 @@ namespace YT
         {
             .m_Start = start / m_DrawerData.m_Size,
             .m_End = (start + size) / m_DrawerData.m_Size,
+            .m_StartTX = glm::vec2(0, 0),
+            .m_EndTX = glm::vec2(1, 1),
             .m_Color = color,
+            .m_Texture = image_reference.GetImageIndex()
         };
 
         m_DrawCount++;
