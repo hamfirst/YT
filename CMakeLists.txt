@@ -20,8 +20,11 @@ find_package(glslang CONFIG REQUIRED)
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 
+find_package(Freetype CONFIG REQUIRED)
+find_package(harfbuzz CONFIG REQUIRED)
+find_package(ICU REQUIRED COMPONENTS uc i18n data)
+
 find_package(Microsoft.GSL CONFIG REQUIRED)
-find_package(Freetype)
 find_path(PLF_HIVE_INCLUDE_DIRS "plf_hive.h")
 find_package(glm CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -48,6 +51,7 @@ set(YT_MODULE_SOURCES
         src/Allocators/BlockTable.ixx
         src/Allocators/FixedBlockAllocator.ixx
         src/Allocators/ObjectPool.ixx
+        src/Allocators/ShelfAllocator2D.ixx
 
         src/Delegate/Delegate.ixx
 
@@ -100,6 +104,9 @@ set(YT_EXTERNAL_MODULE_SOURCES
 set(YT_LINK_LIBRARIES
         Microsoft.GSL::GSL
         wayland-client
+        Freetype::Freetype
+        harfbuzz::harfbuzz
+        ICU::uc ICU::i18n ICU::data
         vulkan
         GPUOpen::VulkanMemoryAllocator
         unofficial::VulkanMemoryAllocator-Hpp::VulkanMemoryAllocator-Hpp
@@ -185,6 +192,10 @@ add_yt_test_executable(YTBitAllocatorUnitTests
 
 add_yt_test_executable(YTFixedBlockAllocatorUnitTests
         tests/Empty.cpp tests/FixedBlockAllocatorTests.cpp
+)
+
+add_yt_test_executable(YTShelfAllocator2DUnitTests
+        tests/Empty.cpp tests/ShelfAllocator2DTests.cpp
 )
 
 add_yt_test_executable(YTDelegateUnitTests

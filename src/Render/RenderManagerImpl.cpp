@@ -974,8 +974,8 @@ namespace YT
         }
 
         ImageFormat format = ImageFormat::R8G8B8A8Unorm;
-        return CreateImageFromPixels(Span(reinterpret_cast<std::byte *>(pixels),
-            tex_width * tex_height * 4), tex_width, tex_height, format);
+        Span<const std::byte> pixel_span(reinterpret_cast<const std::byte *>(pixels), tex_width * tex_height * 4);
+        return CreateImageFromPixels(pixel_span, tex_width, tex_height, format);
     }
 
     MaybeInvalid<ImageReference> RenderManager::CreateImageFromPixels(const Span<const std::byte>& data,
@@ -994,16 +994,19 @@ namespace YT
             m_ImageTransferStagingBuffers.emplace_back(std::move(staging_buffer));
 
             auto handle = m_ImageTable.AllocateHandle(m_Device, m_Allocator,
-                m_ImagePreTransferMemoryBarriers, m_ImagePostTransferMemoryBarriers,
                 width, height, format);
 
+            ImageBuffer * image_buffer = m_ImageTable.ResolveHandle(handle);
+            m_ImagePreTransferMemoryBarriers.emplace_back(image_buffer->GetTransitionToTransferDestinationBarrier());
+            m_ImagePostTransferMemoryBarriers.emplace_back(image_buffer->GetTransitionToShaderReadableBarrier());
+
             auto image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
-            uint32_t image_index = image_handle.m_BlockIndex * ImageTable::BlockSizeValue + image_handle.m_ElemIndex;
+            std::uint32_t image_index = ImageTable::GetHandleIndex(image_handle);
 
             m_ImageTransferInfos.emplace_back(ImageTransferInfo
                 {
                     .m_ImageHandle = { handle },
-                    .m_Image = m_ImageTable.ResolveHandle(handle)->GetImage(),
+                    .m_Image = image_buffer->GetImage(),
                     .m_Width = width,
                     .m_Height = height,
                 });

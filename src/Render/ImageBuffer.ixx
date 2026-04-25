@@ -38,8 +38,6 @@ namespace YT
     {
     public:
         ImageBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator,
-            Vector<vk::ImageMemoryBarrier2> & pre_transfer_memory_barriers,
-            Vector<vk::ImageMemoryBarrier2> & post_transfer_memory_barriers,
             std::uint32_t width, std::uint32_t height, ImageFormat format) :
             m_Device(device), m_Allocator(allocator), m_Width(width), m_Height(height), m_Format(format)
         {
@@ -89,38 +87,6 @@ namespace YT
                 throw Exception("Could not create image view");
             }
 
-            vk::ImageMemoryBarrier2 & pre_memory_barrier = pre_transfer_memory_barriers.emplace_back();
-            pre_memory_barrier.oldLayout = vk::ImageLayout::eUndefined;
-            pre_memory_barrier.newLayout = vk::ImageLayout::eTransferDstOptimal;
-            pre_memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
-            pre_memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
-            pre_memory_barrier.image = m_Image.get();
-            pre_memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-            pre_memory_barrier.subresourceRange.baseMipLevel = 0;
-            pre_memory_barrier.subresourceRange.levelCount = 1;
-            pre_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            pre_memory_barrier.subresourceRange.layerCount = 1;
-            pre_memory_barrier.srcAccessMask = {};
-            pre_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eTransferWrite;
-            pre_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe;
-            pre_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eTransfer;
-
-            vk::ImageMemoryBarrier2 & post_memory_barrier = post_transfer_memory_barriers.emplace_back();
-            post_memory_barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-            post_memory_barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-            post_memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
-            post_memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
-            post_memory_barrier.image = m_Image.get();
-            post_memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-            post_memory_barrier.subresourceRange.baseMipLevel = 0;
-            post_memory_barrier.subresourceRange.levelCount = 1;
-            post_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            post_memory_barrier.subresourceRange.layerCount = 1;
-            post_memory_barrier.srcAccessMask = vk::AccessFlagBits2::eTransferWrite;
-            post_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eShaderRead;
-            post_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTransfer;
-            post_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader;
-
             CreateSampler();
         }
 
@@ -147,6 +113,48 @@ namespace YT
             }
 
             CreateSampler();
+        }
+
+        vk::ImageMemoryBarrier2 GetTransitionToTransferDestinationBarrier() const noexcept
+        {
+            vk::ImageMemoryBarrier2 pre_memory_barrier;
+            pre_memory_barrier.oldLayout = vk::ImageLayout::eUndefined;
+            pre_memory_barrier.newLayout = vk::ImageLayout::eTransferDstOptimal;
+            pre_memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+            pre_memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+            pre_memory_barrier.image = m_Image.get();
+            pre_memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+            pre_memory_barrier.subresourceRange.baseMipLevel = 0;
+            pre_memory_barrier.subresourceRange.levelCount = 1;
+            pre_memory_barrier.subresourceRange.baseArrayLayer = 0;
+            pre_memory_barrier.subresourceRange.layerCount = 1;
+            pre_memory_barrier.srcAccessMask = {};
+            pre_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eTransferWrite;
+            pre_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe;
+            pre_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eTransfer;
+
+            return pre_memory_barrier;
+        }
+
+        vk::ImageMemoryBarrier2 GetTransitionToShaderReadableBarrier() const noexcept
+        {
+            vk::ImageMemoryBarrier2 post_memory_barrier;
+            post_memory_barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+            post_memory_barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+            post_memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+            post_memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+            post_memory_barrier.image = m_Image.get();
+            post_memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+            post_memory_barrier.subresourceRange.baseMipLevel = 0;
+            post_memory_barrier.subresourceRange.levelCount = 1;
+            post_memory_barrier.subresourceRange.baseArrayLayer = 0;
+            post_memory_barrier.subresourceRange.layerCount = 1;
+            post_memory_barrier.srcAccessMask = vk::AccessFlagBits2::eTransferWrite;
+            post_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eShaderRead;
+            post_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTransfer;
+            post_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader;
+
+            return post_memory_barrier;
         }
 
         ImageBuffer(const ImageBuffer&) = delete;

@@ -3,10 +3,12 @@ void main()
     GlobalData global_data = GlobalData_buffer.elems[0];
     QuadData quad_data = QuadData_buffer.elems[v_quad_data_index];
 
+    vec4 color_tex_value = texture(textures[quad_data.m_Texture], v_tx);
+
     switch(quad_data.m_Mode)
     {
         default:
-            o_color = texture(textures[quad_data.m_Texture], v_tx) * quad_data.m_Color;
+            o_color = color_tex_value * quad_data.m_Color;
             return;
 
         // case statements filled in dynamically

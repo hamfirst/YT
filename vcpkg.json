@@ -6,6 +6,15 @@
     "name" : "freetype",
     "version>=" : "2.13.3"
   }, {
+    "name" : "harfbuzz",
+    "version>=" : "13.0.1"
+  }, {
+    "name" : "icu",
+    "version>=" : "78.2"
+  }, {
+    "name" : "thorvg",
+    "version>=" : "1.0.3"
+  }, {
     "name" : "vulkan",
     "version>=" : "2023-12-17"
   }, {
@@ -31,7 +40,7 @@
     "version>=" : "2025-12-22"
   }, {
     "name" : "ms-gsl",
-    "version>=" : "4.2.1#0"
+    "version>=" : "4.2.1"
   }, {
     "name" : "glm",
     "version>=" : "1.0.3"
@@ -43,6 +52,6 @@
     "version>=" : "2024-07-29#1"
   }, {
     "name" : "spirv-reflect",
-    "version>=" : "1.4.341.0#0"
+    "version>=" : "1.4.341.0"
   } ]
 }

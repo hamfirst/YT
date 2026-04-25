@@ -82,7 +82,7 @@ namespace YT
     export template<typename T>
     Span<const std::byte> CreateByteSpan(const T & t)
     {
-        return Span(reinterpret_cast<const std::byte *>(&t), sizeof(t));
+        return Span<const std::byte> { reinterpret_cast<const std::byte *>(&t), sizeof(t) };
     }
 
     export using Mutex = std::mutex;

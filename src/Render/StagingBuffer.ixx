@@ -4,6 +4,7 @@ module;
 #include <cstdint>
 #include <cstring>
 #include <utility>
+#include <span>
 #include <type_traits>
 #include <stdexcept>
 
@@ -20,11 +21,12 @@ namespace YT
     class StagingBuffer
     {
     public:
-        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, const Span<const std::byte> & data)
-            : m_Device(device), m_Allocator(allocator), m_AllocationSize(data.size())
+
+        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, std::size_t buffer_size)
+            : m_Device(device), m_Allocator(allocator), m_AllocationSize(buffer_size)
         {
             vk::BufferCreateInfo buffer_create_info;
-            buffer_create_info.size = data.size();
+            buffer_create_info.size = buffer_size;
             buffer_create_info.usage = vk::BufferUsageFlagBits::eTransferSrc;
 
             vma::AllocationCreateInfo allocation_create_info;
@@ -37,17 +39,16 @@ namespace YT
 
             m_Buffer = std::move(buffer);
             m_Allocation = std::move(allocation);
+        }
 
-            auto * ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
+        StagingBuffer(vk::UniqueDevice & device, vma::UniqueAllocator & allocator, const Span<const std::byte> & data)
+            : StagingBuffer{device, allocator, data.size()}
+        {
+            auto buffer_data = Lock();
 
-            if (!ptr)
-            {
-                throw Exception("Could not map allocation memory");
-            }
+            memcpy(buffer_data.data(), data.data(), data.size());
 
-            memcpy(ptr, data.data(), data.size());
-
-            m_Allocator->unmapMemory(m_Allocation.get());
+            Unlock();
         }
 
         StagingBuffer(const StagingBuffer&) = delete;
@@ -102,12 +103,54 @@ namespace YT
             );
         }
 
+        static vk::BufferImageCopy GetPartialTransferInfo(
+            std::uint32_t buffer_offset, std::uint32_t x, std::uint32_t y,
+            std::uint32_t width, std::uint32_t height) noexcept
+        {
+            vk::BufferImageCopy region;
+            region.bufferOffset = buffer_offset;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+
+            region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+            region.imageSubresource.mipLevel = 0;
+            region.imageSubresource.baseArrayLayer = 0;
+            region.imageSubresource.layerCount = 1;
+
+            region.imageOffset = vk::Offset3D{ static_cast<int32_t>(x), static_cast<int32_t>(y), 0 };
+            region.imageExtent = vk::Extent3D{ width, height, 1 };
+            return region;
+        }
+
+        Span<std::byte> Lock()
+        {
+            assert(!m_IsLocked);
+
+            auto * ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
+
+            if (!ptr)
+            {
+                throw Exception("Could not map allocation memory");
+            }
+
+            m_IsLocked = true;
+            return Span{ ptr, m_AllocationSize };
+        }
+
+        void Unlock()
+        {
+            assert(m_IsLocked);
+            m_Allocator->unmapMemory(m_Allocation.get());
+            m_IsLocked = false;
+        }
+
     private:
 
         vk::UniqueDevice & m_Device;
         vma::UniqueAllocator & m_Allocator;
         vma::UniqueBuffer m_Buffer;
         vma::UniqueAllocation m_Allocation;
-        std::size_t m_AllocationSize;
+        std::size_t m_AllocationSize =  0;
+        bool m_IsLocked = false;
     };
 }

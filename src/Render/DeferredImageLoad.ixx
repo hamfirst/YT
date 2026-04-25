@@ -39,7 +39,7 @@ namespace YT
     };
 
     export template <int ArraySize>
-    DeferredImageLoad LoadDeferredImageEmbedded(std::byte (&arr)[ArraySize])
+    DeferredImageLoad LoadDeferredImageEmbedded(const std::byte (&arr)[ArraySize])
     {
         return DeferredImageLoad(Span(&arr[0], ArraySize));
     }
@@ -47,7 +47,7 @@ namespace YT
     export template <int ArraySize>
     DeferredImageLoad LoadDeferredImageEmbedded(unsigned char (&arr)[ArraySize])
     {
-        return DeferredImageLoad(Span(reinterpret_cast<std::byte *>(&arr[0]), ArraySize));
+        return DeferredImageLoad(CreateByteSpan(arr));
     }
 
 }
