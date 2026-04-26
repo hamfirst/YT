@@ -121,6 +121,8 @@ namespace YT
 
 
     protected:
+
+        PooledObject<vk::UniqueSemaphore> GetSemaphoreFromPool() noexcept;
 ;
         bool CreateSwapChainResources(WindowResource & resource) noexcept;
 
@@ -144,7 +146,7 @@ namespace YT
         template <typename ObjectType>
         void PushDeferredDeleteObject(ObjectType && obj)
         {
-            m_FrameResources[m_FrameIndex].m_DeferredDeletionObjects.emplace_back(std::forward<ObjectType>(obj));
+            m_FrameResources[m_FrameIndex].m_DeferredDeletionObjects.emplace_back(std::forward<std::decay_t<ObjectType>>(obj));
         }
 
         template <typename ObjectType>
@@ -176,6 +178,8 @@ namespace YT
         vk::Queue m_Queue;
         vma::UniqueAllocator m_Allocator;
         vk::UniqueCommandPool m_CommandPool;
+
+        ObjectPool<vk::UniqueSemaphore> m_SemaphorePool;
 
         // Timers
         std::chrono::time_point<std::chrono::steady_clock> m_StartTime;
@@ -230,7 +234,7 @@ namespace YT
         struct FrameResource
         {
             Vector<UniquePtr<TransientBuffer>> m_Buffers;
-            vk::UniqueCommandBuffer m_CommandBuffer;;
+            vk::UniqueCommandBuffer m_CommandBuffer;
 
             vk::DescriptorSet m_BufferDescriptorSet;
 
