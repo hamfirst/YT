@@ -31,9 +31,27 @@ namespace YT
         m_WindowHandle = g_WindowManager->CreateWindow(init_info);
     }
 
+    WindowRef::WindowRef(WindowRef &&rhs) noexcept
+    {
+        m_WindowHandle = rhs.m_WindowHandle;
+        rhs.m_WindowHandle = {};
+    }
+
+    WindowRef & WindowRef::operator=(WindowRef && rhs) noexcept
+    {
+        if (m_WindowHandle && g_WindowManager)
+        {
+            g_WindowManager->CloseWindow(m_WindowHandle);
+        }
+
+        m_WindowHandle = rhs.m_WindowHandle;
+        rhs.m_WindowHandle = {};
+        return *this;
+    }
+
     WindowRef::~WindowRef()
     {
-        if (m_WindowHandle)
+        if (m_WindowHandle && g_WindowManager)
         {
             g_WindowManager->CloseWindow(m_WindowHandle);
         }

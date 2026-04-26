@@ -53,17 +53,25 @@ int main()
         return ENODEV;
     }
 
-    WindowInitInfo window_init_info;
-    if (WindowRef window_ref = CreateWindow_GetRef(window_init_info))
-    {
-        window_ref.SetContent(MakeWidget<TestWidget>());
+    std::vector<WindowRef> windows;
 
-        RunUntilAllWindowsClosed();
-    }
-    else
+    printf("Creating windows\n");
+
+    for (int i = 0; i < 1; ++i)
     {
-        FatalPrint("Failed to create window");
+        WindowInitInfo window_init_info;
+        if (WindowRef window_ref = CreateWindow_GetRef(window_init_info))
+        {
+            window_ref.SetContent(MakeWidget<TestWidget>());
+            windows.emplace_back(std::move(window_ref));
+        }
+        else
+        {
+            FatalPrint("Failed to create window");
+        }
     }
+
+    RunUntilAllWindowsClosed();
 
     Cleanup();
     return 0;

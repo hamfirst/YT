@@ -82,6 +82,8 @@ namespace YT
         bool RenderWindowResources(const Vector<WindowResource*> & window_resources) noexcept;
         void ReleaseWindowResource(WindowResource & resource) noexcept;
 
+        void CleanupImmediately();
+
         void RegisterShader(const std::uint8_t* shader_data, std::size_t shader_data_size) noexcept;
         void UnregisterShader(const std::uint8_t* shader_data) noexcept;
         void SetShaderInclude(const StringView & include_name, const StringView & include_code) noexcept;
@@ -120,23 +122,6 @@ namespace YT
         void RegisterRenderGlobals();
 
 
-    protected:
-
-        PooledObject<vk::UniqueSemaphore> GetSemaphoreFromPool() noexcept;
-;
-        bool CreateSwapChainResources(WindowResource & resource) noexcept;
-
-        [[nodiscard]] OptionalPtr<vk::UniqueShaderModule> FindShaderModule(const std::uint8_t * shader_data) noexcept;
-
-        bool UpdateBufferDescriptorSetInfo() noexcept;
-        [[nodiscard]] OptionalPtr<PSOVariant> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
-
-        bool PrepareCommandBufferForPresent(const WindowResource & resource) noexcept;
-        bool CompleteCommandBufferForPresent(const WindowResource & resource) noexcept;
-        bool PresentWindow(const WindowResource & resource) noexcept;
-
-        bool SubmitImageUploadCommandBuffer() noexcept;
-
         template <typename Callback>
         void PushDeferredDeleteCallback(Callback && callback)
         {
@@ -160,6 +145,22 @@ namespace YT
             obj_list.clear();
         }
 
+
+    protected:
+
+        bool CreateSwapChainResources(WindowResource & resource) noexcept;
+
+        [[nodiscard]] OptionalPtr<vk::UniqueShaderModule> FindShaderModule(const std::uint8_t * shader_data) noexcept;
+
+        bool UpdateBufferDescriptorSetInfo() noexcept;
+        [[nodiscard]] OptionalPtr<PSOVariant> PreparePSO(const PSODeferredSettings & deferred_settings, PSO & pso) noexcept;
+
+        bool PrepareCommandBufferForPresent(const WindowResource & resource) noexcept;
+        bool CompleteCommandBufferForPresent(const WindowResource & resource) noexcept;
+        bool PresentWindow(const WindowResource & resource) noexcept;
+
+        bool SubmitImageUploadCommandBuffer() noexcept;
+
     private:
 
         // Vulkan data
@@ -179,8 +180,6 @@ namespace YT
         vma::UniqueAllocator m_Allocator;
         vk::UniqueCommandPool m_CommandPool;
 
-        ObjectPool<vk::UniqueSemaphore> m_SemaphorePool;
-
         // Timers
         std::chrono::time_point<std::chrono::steady_clock> m_StartTime;
         std::chrono::time_point<std::chrono::steady_clock> m_LastRenderTime;
@@ -189,7 +188,7 @@ namespace YT
         Delegate<void ()> m_PreRenderDelegate;
         Delegate<void ()> m_PostRenderDelegate;
 
-        // Shaders
+        // ShadersCleanup
         Map<const std::uint8_t*, vk::UniqueShaderModule> m_ShaderModules;
         ShaderBuilder m_ShaderBuilder;
 

@@ -59,6 +59,8 @@ namespace YT
         [[nodiscard]] bool CheckDeviceSupport(vk::PhysicalDevice physical_device, uint32_t queue_index) const noexcept;
         [[nodiscard]] bool CreateRenderSurface(vk::UniqueInstance & instance, WindowResource & resource) const noexcept;
 
+        void SyncBeforeSurfaceDestroy() noexcept;
+
     private:
         static void HandleGlobal(void * data, wl_registry * registry, uint32_t name,
                                  const char * interface, uint32_t version) noexcept;

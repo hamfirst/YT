@@ -35,8 +35,8 @@ namespace YT
         vk::UniqueSwapchainKHR m_SwapChain;
         Vector<vk::Image> m_SwapChainImages;
         Vector<vk::UniqueImageView> m_SwapChainImageViews;
-        Vector<PooledObject<vk::UniqueSemaphore>> m_ImageAvailableSemaphores;
-        Vector<PooledObject<vk::UniqueSemaphore>> m_RenderFinishedSemaphores;
+        Vector<vk::UniqueSemaphore> m_ImageAvailableSemaphores;
+        Vector<vk::UniqueSemaphore> m_RenderFinishedSemaphores;
         Vector<std::uint64_t> m_FrameSemaphoreValues;
         Vector<vk::UniqueCommandBuffer> m_CommandBuffers;
 

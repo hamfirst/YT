@@ -56,6 +56,7 @@ namespace YT
     void Cleanup() noexcept
     {
         g_WindowManager->CloseAllWindows();
+        g_RenderManager->CleanupImmediately();
 
         g_RenderManager.reset();
         g_WindowManager.reset();

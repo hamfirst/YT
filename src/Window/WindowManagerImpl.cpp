@@ -167,7 +167,7 @@ namespace YT
         pfd.fd = m_DisplayFD;
         pfd.events = POLLIN;
 
-        while (true)
+        while (HasOpenWindows())
         {
             int ret = poll(&pfd, 1, 1);
             switch (ret)
@@ -336,6 +336,8 @@ namespace YT
             {
                 wl_surface_destroy(resource->m_WaylandSurface);
             }
+
+            wl_display_roundtrip(m_Display);
         }
 
         m_WindowTable->ReleaseWindowHandle(handle);
@@ -348,6 +350,8 @@ namespace YT
         {
            CloseWindow(handle);
         });
+
+        wl_display_roundtrip(m_Display);
     }
 
     const char * WindowManager::GetSurfaceExtensionName() noexcept
@@ -380,6 +384,18 @@ namespace YT
 
         FatalPrint("Failed to create surface {}", vk::to_string(static_cast<vk::Result>(result)));
         return false;
+    }
+
+    void WindowManager::SyncBeforeSurfaceDestroy() noexcept
+    {
+        // Flush and process any pending events (like buffer releases)
+        while (wl_display_prepare_read(m_Display) != 0)
+        {
+            wl_display_dispatch_pending(m_Display);
+        }
+        wl_display_flush(m_Display);
+        wl_display_read_events(m_Display);
+        wl_display_dispatch_pending(m_Display);
     }
 
     void WindowManager::HandleGlobal(void * data, wl_registry * registry, uint32_t name,

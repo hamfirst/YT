@@ -30,9 +30,9 @@ namespace YT
 
         WindowRef() noexcept = default;
         WindowRef(const WindowRef &) noexcept = delete;
-        WindowRef(WindowRef &&) noexcept = default;
+        WindowRef(WindowRef && rhs) noexcept;
         WindowRef &operator=(const WindowRef &) noexcept = delete;
-        WindowRef &operator=(WindowRef &&) noexcept = default;
+        WindowRef &operator=(WindowRef && rhs) noexcept;
 
         ~WindowRef();
 

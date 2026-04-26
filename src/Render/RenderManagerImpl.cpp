@@ -157,12 +157,19 @@ namespace YT
 
         for (auto & frame_resource : m_FrameResources)
         {
+            frame_resource.m_DeferredDeletionObjects.clear();
+            frame_resource.m_CommandBuffer.reset();
+
             for (const auto & func : frame_resource.m_DeletionCallbacks)
             {
                 func();
             }
+
         }
 
+        m_FrameSemaphore.reset();
+
+        m_Device->waitIdle();
     }
 
     void RenderManager::CreatePhysicalDevice(const ApplicationInitInfo & init_info)
@@ -523,10 +530,11 @@ namespace YT
                 return false;
             }
 
+            vk::SemaphoreCreateInfo semaphore_create_info;
             for (const vk::Image & swap_chain_image : resource.m_SwapChainImages)
             {
-                resource.m_ImageAvailableSemaphores.emplace_back(GetSemaphoreFromPool());
-                resource.m_RenderFinishedSemaphores.emplace_back(GetSemaphoreFromPool());
+                resource.m_ImageAvailableSemaphores.emplace_back(m_Device->createSemaphoreUnique(semaphore_create_info));
+                resource.m_RenderFinishedSemaphores.emplace_back(m_Device->createSemaphoreUnique(semaphore_create_info));
 
                 resource.m_FrameSemaphoreValues.emplace_back(0);
             }
@@ -571,10 +579,11 @@ namespace YT
             return false;
         }
 
+        vk::SemaphoreCreateInfo semaphore_create_info = {};
         for (const vk::Image & swap_chain_image : resource.m_SwapChainImages)
         {
-            resource.m_ImageAvailableSemaphores.emplace_back(GetSemaphoreFromPool());
-            resource.m_RenderFinishedSemaphores.emplace_back(GetSemaphoreFromPool());
+            resource.m_ImageAvailableSemaphores.emplace_back(m_Device->createSemaphoreUnique(semaphore_create_info));
+            resource.m_RenderFinishedSemaphores.emplace_back(m_Device->createSemaphoreUnique(semaphore_create_info));
         }
 
         return true;
@@ -649,7 +658,7 @@ namespace YT
                     }
 
                     result = m_Device->acquireNextImageKHR(resource.m_SwapChain.get(), UINT64_MAX,
-                            resource.m_ImageAvailableSemaphores[resource.m_FrameIndex]->get(), {}, &resource.m_SwapChainImageIndex);
+                            resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get(), {}, &resource.m_SwapChainImageIndex);
 
                     while (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
                     {
@@ -661,7 +670,7 @@ namespace YT
                         }
 
                         result = m_Device->acquireNextImageKHR(resource.m_SwapChain.get(), UINT64_MAX,
-                                resource.m_ImageAvailableSemaphores[resource.m_FrameIndex]->get(), {}, &resource.m_SwapChainImageIndex);
+                                resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get(), {}, &resource.m_SwapChainImageIndex);
                     }
 
                     if (!PrepareCommandBufferForPresent(resource))
@@ -725,7 +734,7 @@ namespace YT
                     image_avail_semaphore_wait_infos.emplace_back();
 
                 image_avail_submit_info.setSemaphore(
-                    resource.m_ImageAvailableSemaphores[resource.m_FrameIndex]->get());
+                    resource.m_ImageAvailableSemaphores[resource.m_FrameIndex].get());
                 image_avail_submit_info.setStageMask(
                     vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
@@ -733,7 +742,7 @@ namespace YT
                     render_finished_semaphore_signal_infos.emplace_back();
 
                 render_finished_submit_info.setSemaphore(
-                    resource.m_RenderFinishedSemaphores[resource.m_SwapChainImageIndex]->get());
+                    resource.m_RenderFinishedSemaphores[resource.m_SwapChainImageIndex].get());
                 render_finished_submit_info.setStageMask(
                     vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
@@ -814,28 +823,53 @@ namespace YT
 
     void RenderManager::ReleaseWindowResource(WindowResource & resource) noexcept
     {
+        CleanupImmediately();
+
         for (auto & semaphore : resource.m_ImageAvailableSemaphores)
         {
-            PushDeferredDeleteObject(std::move(semaphore));
+            semaphore.reset();
         }
 
         for (auto & semaphore : resource.m_RenderFinishedSemaphores)
         {
-            PushDeferredDeleteObject(std::move(semaphore));
+            semaphore.reset();
         }
 
         for (auto & image_view : resource.m_SwapChainImageViews)
         {
-            PushDeferredDeleteObject(std::move(image_view));
+            image_view.reset();
         }
 
         for (auto & command_buffer : resource.m_CommandBuffers)
         {
-            PushDeferredDeleteObject(std::move(command_buffer));
+            command_buffer.reset();
         }
 
-        PushDeferredDeleteObject(resource.m_SwapChain);
-        PushDeferredDeleteObject(resource.m_VkSurface);
+        resource.m_SwapChain.reset();
+
+        g_WindowManager->SyncBeforeSurfaceDestroy();
+
+        resource.m_VkSurface.reset();
+
+    }
+
+    void RenderManager::CleanupImmediately()
+    {
+        m_Device->waitIdle();
+
+        for (auto & frame_resource : m_FrameResources)
+        {
+            frame_resource.m_DeferredDeletionObjects.clear();
+
+            for (const auto & func : frame_resource.m_DeletionCallbacks)
+            {
+                func();
+            }
+
+            frame_resource.m_DeletionCallbacks.clear();
+        }
+
+        m_Device->waitIdle();
     }
 
     void RenderManager::RegisterShader(const uint8_t* shader_data, std::size_t shader_data_size) noexcept
@@ -1106,21 +1140,6 @@ namespace YT
     {
         m_GlobalBufferTypeId = RegisterShaderBufferStruct<GlobalData>(1);
         m_IndexBufferTypeId = RegisterShaderBufferStruct<IndexData>(128 * 1024);
-    }
-
-    PooledObject<vk::UniqueSemaphore> RenderManager::GetSemaphoreFromPool() noexcept
-    {
-        PooledObject<vk::UniqueSemaphore> result = m_SemaphorePool.GetFreeObject([&]()
-        {
-            vk::SemaphoreCreateInfo semaphore_create_info;
-            return m_Device->createSemaphoreUnique(semaphore_create_info);
-        },
-        [&] (vk::UniqueSemaphore & semaphore)
-        {
-
-        });
-
-        return result;
     }
 
     bool RenderManager::CreateSwapChainResources(WindowResource & resource) noexcept
@@ -1728,7 +1747,7 @@ namespace YT
         {
             std::array render_finish_semaphores =
             {
-                resource.m_RenderFinishedSemaphores[resource.m_SwapChainImageIndex]->get()
+                resource.m_RenderFinishedSemaphores[resource.m_SwapChainImageIndex].get()
             };
             std::array swap_chains = { resource.m_SwapChain.get() };
             std::array image_indices = { resource.m_SwapChainImageIndex };
