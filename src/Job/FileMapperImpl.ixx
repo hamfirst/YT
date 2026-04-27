@@ -7,8 +7,6 @@ module;
 #include <semaphore>
 #include <functional>
 
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
-#include <readerwriterqueue/readerwriterqueue.h>
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -140,14 +138,7 @@ namespace YT
 
         void Update() noexcept
         {
-            for (auto & output : m_OutputQueue)
-            {
-                OutputData output_data;
-                while (output.try_dequeue(output_data))
-                {
-                    output_data.m_Callback(std::move(output_data.m_File));
-                }
-            }
+
 
         }
 
@@ -160,7 +151,7 @@ namespace YT
 
         void RunThread(int thread_index) noexcept
         {
-            while (m_Running)
+            /*while (m_Running)
             {
                 m_Semaphore.acquire();
 
@@ -174,7 +165,7 @@ namespace YT
                             .m_Callback = std::move(input_data.m_Callback)
                         });
                 }
-            }
+            }*/
         }
 
     private:
@@ -196,8 +187,6 @@ namespace YT
             Function<void(MappedFile &&)> m_Callback;
         };
 
-        moodycamel::ConcurrentQueue<InputData> m_InputQueue;
-        std::array<moodycamel::ReaderWriterQueue<OutputData>, NumThreads> m_OutputQueue;
     };
 
     FileMapper g_FileMapper;

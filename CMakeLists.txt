@@ -8,6 +8,7 @@ set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 #set(CMAKE_CXX_MODULE_STD ON)
 set(CMAKE_CXX_FLAGS "-fmodules -Wno-c23-extensions") #-Wno-interference-size  -freflection -fexpansion-statements
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(YT LANGUAGES C CXX)
 
@@ -64,6 +65,10 @@ set(YT_MODULE_SOURCES
         src/Job/JobManagerImpl.cpp
         src/Job/FileMapper.ixx
         src/Job/FileMapperImpl.ixx
+
+        src/Queues/MultiProducerMultiConsumer.ixx
+        src/Queues/SingleProducerMultiConsumer.ixx
+        src/Queues/SingleProducerSingleConsumer.ixx
 
         src/Render/DeferredDelete.ixx
         src/Render/DeferredImageLoad.ixx
@@ -214,4 +219,16 @@ add_yt_test_executable(YTDeferredDeleteUnitTests
 
 add_yt_test_executable(YTObjectPoolUnitTests
         tests/Empty.cpp tests/ObjectPoolTests.cpp
+)
+
+add_yt_test_executable(YTSingleProducerSingleConsumerUnitTests
+        tests/Empty.cpp tests/SingleProducerSingleConsumerTests.cpp
+)
+
+add_yt_test_executable(YTSingleProducerMultiConsumerUnitTests
+        tests/Empty.cpp tests/SingleProducerMultiConsumerTests.cpp
+)
+
+add_yt_test_executable(YTMultiProducerMultiConsumerUnitTests
+        tests/Empty.cpp tests/MultiProducerMultiConsumerTests.cpp
 )
