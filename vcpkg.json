@@ -15,6 +15,12 @@
     "name" : "thorvg",
     "version>=" : "1.0.3"
   }, {
+    "name" : "concurrentqueue",
+    "version>=" : "1.0.5"
+  }, {
+    "name" : "readerwriterqueue",
+    "version>=" : "1.0.7"
+  }, {
     "name" : "vulkan",
     "version>=" : "2023-12-17"
   }, {

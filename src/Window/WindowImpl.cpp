@@ -12,6 +12,7 @@ import :WindowManager;
 import :Widget;
 import :Delegate;
 import :Window;
+import :FileMapper;
 
 namespace YT
 {

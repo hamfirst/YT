@@ -24,6 +24,8 @@ find_package(Freetype CONFIG REQUIRED)
 find_package(harfbuzz CONFIG REQUIRED)
 find_package(ICU REQUIRED COMPONENTS uc i18n data)
 
+find_package(concurrentqueue CONFIG REQUIRED)
+find_package(readerwriterqueue CONFIG REQUIRED)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_path(PLF_HIVE_INCLUDE_DIRS "plf_hive.h")
 find_package(glm CONFIG REQUIRED)
@@ -60,6 +62,8 @@ set(YT_MODULE_SOURCES
 
         src/Job/JobManager.ixx
         src/Job/JobManagerImpl.cpp
+        src/Job/FileMapper.ixx
+        src/Job/FileMapperImpl.ixx
 
         src/Render/DeferredDelete.ixx
         src/Render/DeferredImageLoad.ixx
@@ -103,6 +107,8 @@ set(YT_EXTERNAL_MODULE_SOURCES
 
 set(YT_LINK_LIBRARIES
         Microsoft.GSL::GSL
+        concurrentqueue::concurrentqueue
+        readerwriterqueue::readerwriterqueue
         wayland-client
         Freetype::Freetype
         harfbuzz::harfbuzz

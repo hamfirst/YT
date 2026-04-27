@@ -22,7 +22,7 @@ using namespace YT;
 
 unsigned char TestImageData[] =
 {
-#embed "cs-black-000.png"
+#embed "assets/cs-black-000.png"
 };
 
 auto TestDeferredImage = LoadDeferredImageEmbedded(TestImageData);
@@ -54,9 +54,6 @@ int main()
     }
 
     std::vector<WindowRef> windows;
-
-    printf("Creating windows\n");
-
     for (int i = 0; i < 1; ++i)
     {
         WindowInitInfo window_init_info;
