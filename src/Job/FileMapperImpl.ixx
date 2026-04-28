@@ -14,11 +14,15 @@ module;
 
 module YT:FileMapperImpl;
 
-import :FileMapper;
 import :Types;
+import :FileMapper;
+import :MultiProducerMultiConsumer;
+import :MultiProducerSingleConsumer;
 
 namespace YT
 {
+    FileMapper::DeferredLoad * FileMapper::s_DeferredLoad = nullptr;
+
     MappedFile::MappedFile(const StringView & file_name) noexcept
     {
         // 1. Open the file
@@ -97,113 +101,115 @@ namespace YT
         return { static_cast<const std::byte *>(m_Data), m_Size };
     }
 
-
-    class FileMapper final
+    FileMapper::FileMapper() noexcept :
+        m_Semaphore(0)
     {
-    public:
-
-        static constexpr std::size_t NumThreads = 4;
-
-        FileMapper() noexcept :
-            m_Semaphore(0)
+        int thread_index = 0;
+        for (std::thread & thread : m_Threads)
         {
-            int thread_index = 0;
-            for (std::thread & thread : m_Threads)
+            thread = std::thread([this, thread_index]()
             {
-                thread = std::thread([this, thread_index]()
-                {
-                    RunThread(thread_index);
-                });
+                RunThread(thread_index);
+            });
 
-                ++thread_index;
-            }
+            ++thread_index;
         }
-
-        FileMapper(const FileMapper&) = delete;
-        FileMapper(FileMapper&&) = delete;
-        FileMapper& operator=(const FileMapper&) = delete;
-        FileMapper& operator=(FileMapper&&) = delete;
-
-        ~FileMapper()
-        {
-            m_Running = false;
-
-            m_Semaphore.release(NumThreads);
-
-            for (std::thread & thread : m_Threads)
-            {
-                thread.join();
-            }
-        }
-
-        void Update() noexcept
-        {
-
-
-        }
-
-        void SyncAllFileLoads() noexcept
-        {
-
-        }
-
-    private:
-
-        void RunThread(int thread_index) noexcept
-        {
-            /*while (m_Running)
-            {
-                m_Semaphore.acquire();
-
-                InputData input_data;
-                if (m_InputQueue.try_dequeue(input_data))
-                {
-                    m_OutputQueue[thread_index].enqueue(
-                        OutputData
-                        {
-                            .m_File = MappedFile{ input_data.m_FileName },
-                            .m_Callback = std::move(input_data.m_Callback)
-                        });
-                }
-            }*/
-        }
-
-    private:
-
-        std::atomic_bool m_Running = true;
-
-        std::array<std::thread, NumThreads> m_Threads;
-        std::counting_semaphore<> m_Semaphore;
-
-        struct InputData
-        {
-            String m_FileName;
-            Function<void(MappedFile &&)> m_Callback;
-        };
-
-        struct OutputData
-        {
-            MappedFile m_File;
-            Function<void(MappedFile &&)> m_Callback;
-        };
-
-    };
-
-    FileMapper g_FileMapper;
-
-    void MapFile(const StringView & file_name,
-        Function<void(const Span<const std::byte> &)> && callback)
-    {
-
     }
 
-    void UpdateFileLoads()
+    FileMapper::~FileMapper()
     {
+        m_Running = false;
 
+        m_Semaphore.release(NumThreads);
+
+        for (std::thread & thread : m_Threads)
+        {
+            thread.join();
+        }
     }
 
-    void SyncAllFileLoads()
+    void FileMapper::MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept
     {
+        InputData input_data
+        {
+            .m_FileName = String(file_name),
+            .m_Callback = std::move(callback)
+        };
 
+        while (!m_InputQueue.TryEnqueue(std::move(input_data)))
+        {
+            std::this_thread::yield();
+        }
+
+        ++m_Requests;
+        m_Semaphore.release();
+    }
+
+    void FileMapper::Update() noexcept
+    {
+        OutputData output_data;
+        while (m_OutputQueue.TryDequeue(output_data))
+        {
+            output_data.m_Callback(std::move(output_data.m_File));
+        }
+    }
+
+    void FileMapper::SyncAllFileLoads() noexcept
+    {
+        while (true)
+        {
+            Update();
+
+            if (m_Requests.load() == m_Responses.load())
+            {
+                break;
+            }
+
+            std::this_thread::yield();
+        }
+    }
+
+    void FileMapper::PushDeferred(Function<void()> && func) noexcept
+    {
+        DeferredLoad * deferred_load = new DeferredLoad{ std::move(func), s_DeferredLoad };
+        s_DeferredLoad = deferred_load;
+    }
+
+    void FileMapper::CallDeferred() noexcept
+    {
+        while (s_DeferredLoad != nullptr)
+        {
+            DeferredLoad * deferred_load = s_DeferredLoad;
+            s_DeferredLoad = deferred_load->m_Next;
+
+            deferred_load->m_Callback();
+
+            delete deferred_load;
+        }
+    }
+
+    void FileMapper::RunThread(int thread_index) noexcept
+    {
+         while (m_Running)
+         {
+             m_Semaphore.acquire();
+
+             InputData input_data;
+             if (m_InputQueue.TryDequeue(input_data))
+             {
+                 OutputData output_data
+                 {
+                     .m_File = MappedFile{ input_data.m_FileName },
+                     .m_Callback = std::move(input_data.m_Callback)
+                 };
+
+                 while (!m_OutputQueue.Emplace(std::move(output_data)))
+                 {
+                     std::this_thread::yield();
+                 }
+
+                 ++m_Responses;
+             }
+         }
     }
 }

@@ -67,6 +67,7 @@ set(YT_MODULE_SOURCES
         src/Job/FileMapperImpl.ixx
 
         src/Queues/MultiProducerMultiConsumer.ixx
+        src/Queues/MultiProducerSingleConsumer.ixx
         src/Queues/SingleProducerMultiConsumer.ixx
         src/Queues/SingleProducerSingleConsumer.ixx
 
@@ -232,3 +233,8 @@ add_yt_test_executable(YTSingleProducerMultiConsumerUnitTests
 add_yt_test_executable(YTMultiProducerMultiConsumerUnitTests
         tests/Empty.cpp tests/MultiProducerMultiConsumerTests.cpp
 )
+
+add_yt_test_executable(YTMultiProducerSingleConsumerUnitTests
+        tests/Empty.cpp tests/MultiProducerSingleConsumerTests.cpp
+)
+target_link_libraries(YTMultiProducerSingleConsumerUnitTests PRIVATE GTest::gtest_main)

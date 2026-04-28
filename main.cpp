@@ -20,12 +20,8 @@ import YT;
 
 using namespace YT;
 
-unsigned char TestImageData[] =
-{
-#embed "assets/cs-black-000.png"
-};
 
-auto TestDeferredImage = LoadDeferredImageEmbedded(TestImageData);
+DeferredImageLoad TestDeferredImage("../assets/cs-black-000.png");
 
 
 class TestWidget : public Widget<TestWidget>

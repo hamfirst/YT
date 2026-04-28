@@ -13,6 +13,8 @@ export import :BlockTable;
 export import :FixedBlockAllocator;
 export import :Init;
 export import :Delegate;
+export import :MultiProducerSingleConsumer;
+export import :MultiProducerMultiConsumer;
 export import :Window;
 export import :Widget;
 export import :Drawer;
@@ -22,6 +24,7 @@ export import :ImageReference;
 export import :DeferredImageLoad;
 export import :WindowTypes;
 export import :JobManager;
+export import :FileMapper;
 
 namespace YT
 {

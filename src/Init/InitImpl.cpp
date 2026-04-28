@@ -11,12 +11,14 @@ import :JobManager;
 import :WindowManager;
 import :RenderManager;
 import :QuadRender;
+import :FileMapper;
 
 namespace YT
 {
     bool Init(const ApplicationInitInfo& init_info) noexcept
     {
         g_InitTime = std::chrono::high_resolution_clock::now();
+        g_FileMapper.CallDeferred();
 
         if (!JobManager::CreateJobManager())
         {

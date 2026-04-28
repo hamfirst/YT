@@ -6,6 +6,7 @@ module;
 #include <cstddef>
 #include <vector>
 #include <string>
+#include <any>
 #include <memory>
 #include <optional>
 #include <functional>
@@ -48,6 +49,8 @@ namespace YT
 
     export template<typename K, typename V>
     auto MakePair(K && k, V && v) { return std::make_pair(std::forward<decltype(k)>(k), std::forward<decltype(v)>(v)); }
+
+    export using Any = std::any;
 
     export template<typename T>
     using OptionalPtr = T*;

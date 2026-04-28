@@ -3,10 +3,15 @@ module;
 
 #include <cstddef>
 #include <cstdint>
+#include <thread>
+#include <semaphore>
+#include <functional>
 
 export module YT:FileMapper;
 
 import :Types;
+import :MultiProducerMultiConsumer;
+import :MultiProducerSingleConsumer;
 
 namespace YT
 {
@@ -35,9 +40,68 @@ namespace YT
         void * m_Data = nullptr;
     };
 
+    export class FileMapper final
+    {
+    public:
 
-    export void MapFile(const StringView & file_name,
-        Function<void(MappedFile &&)> && callback);
-    export void UpdateFileLoads();
-    export void SyncAllFileLoads();
+        static constexpr std::size_t NumThreads = 4;
+
+        FileMapper() noexcept;
+
+        FileMapper(const FileMapper&) = delete;
+        FileMapper(FileMapper&&) = delete;
+        FileMapper& operator=(const FileMapper&) = delete;
+        FileMapper& operator=(FileMapper&&) = delete;
+
+        ~FileMapper();
+
+        void MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept;
+
+        void Update() noexcept;
+        void SyncAllFileLoads() noexcept;
+
+        static void PushDeferred(Function<void()> && func) noexcept;
+        static void CallDeferred() noexcept;
+
+    private:
+
+        void RunThread(int thread_index) noexcept;
+
+    private:
+
+        std::atomic_bool m_Running = true;
+        std::atomic_int m_Requests = 0;
+        std::atomic_int m_Responses = 0;
+
+        std::array<std::thread, NumThreads> m_Threads;
+        std::counting_semaphore<> m_Semaphore;
+
+    private:
+        struct InputData
+        {
+            String m_FileName;
+            Function<void(MappedFile &&)> m_Callback;
+        };
+
+        struct OutputData
+        {
+            MappedFile m_File;
+            Function<void(MappedFile &&)> m_Callback;
+        };
+
+        MultiProducerMultiConsumer<InputData, 1024> m_InputQueue;
+        MultiProducerSingleConsumer<OutputData, 1024> m_OutputQueue;
+
+    private:
+
+        struct DeferredLoad
+        {
+            Function<void()> m_Callback;
+            DeferredLoad * m_Next = nullptr;
+        };
+
+        static DeferredLoad * s_DeferredLoad;
+    };
+
+    FileMapper g_FileMapper;
 }

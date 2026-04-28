@@ -41,6 +41,7 @@ import :WindowManager;
 import :RenderManager;
 import :RenderReflect;
 import :DeferredImageLoad;
+import :FileMapper;
 import :Drawer;
 
 VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
@@ -1117,11 +1118,19 @@ namespace YT
 
     void RenderManager::FinalizeDeferredImageLoad() noexcept
     {
-        std::array<unsigned char, 4> white_texture_data = { 255, 255, 255, 255 };
-        m_WhiteImage = CreateImageFromPixels(CreateByteSpan(white_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+        if (!m_WhiteImage)
+        {
+            std::array<unsigned char, 4> white_texture_data = { 255, 255, 255, 255 };
+            m_WhiteImage = CreateImageFromPixels(CreateByteSpan(white_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+        }
 
-        std::array<unsigned char, 4> black_texture_data = { 0, 0, 0, 255 };
-        m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+        if (!m_BlackImage)
+        {
+            std::array<unsigned char, 4> black_texture_data = { 0, 0, 0, 255 };
+            m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+        }
+
+        g_FileMapper.SyncAllFileLoads();
 
         DeferredImageLoad * deferred_image_load = g_DeferredImageLoadHead;
         while (deferred_image_load)
