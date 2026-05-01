@@ -25,14 +25,7 @@ import :FixedBlockAllocator;
 
 namespace YT
 {
-    struct JobCompletionTrackingElement
-    {
-        std::size_t m_LocalCount = 0;
-        std::atomic_size_t m_RemoteCount = 0;
-        std::byte m_Pad[std::hardware_destructive_interference_size - sizeof(m_LocalCount) - sizeof(m_RemoteCount)] = {};
-    };
 
-    using JobCompletionTrackingBlock = std::array<JobCompletionTrackingElement, Threading::NumThreads>;
 
     /**
      * @brief Base data structure for job promises.

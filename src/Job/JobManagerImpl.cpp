@@ -17,12 +17,11 @@ module YT:JobManagerImpl;
 import :Types;
 import :JobManager;
 
-
-thread_local int g_ThreadID = -1;
-thread_local int g_NextJobID = 0;
-
 namespace YT
 {
+    thread_local int g_ThreadID = -1;
+    thread_local int g_NextJobID = 0;
+
     bool JobManager::CreateJobManager() noexcept
     {
         if (g_JobManager)
