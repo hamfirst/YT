@@ -18,6 +18,7 @@ import :Types;
 import :FileMapper;
 import :MultiProducerMultiConsumer;
 import :MultiProducerSingleConsumer;
+import :Coroutine;
 
 namespace YT
 {
@@ -128,13 +129,28 @@ namespace YT
         }
     }
 
-    void FileMapper::MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback, bool immediate_callback) noexcept
+    void FileMapper::MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept
     {
         InputData input_data
         {
             .m_FileName = String(file_name),
-            .m_ImmediateCallback = immediate_callback,
             .m_Callback = std::move(callback)
+        };
+
+        while (!m_InputQueue.TryEnqueue(std::move(input_data)))
+        {
+            std::this_thread::yield();
+        }
+
+        ++m_Requests;
+        m_Semaphore.release();
+    }
+
+    void FileMapper::PushCoro(CoroBase * coro) noexcept
+    {
+        InputData input_data
+        {
+            .m_Coro = coro
         };
 
         while (!m_InputQueue.TryEnqueue(std::move(input_data)))
@@ -191,26 +207,34 @@ namespace YT
 
     void FileMapper::RunThread(int thread_index) noexcept
     {
-         while (m_Running)
-         {
+        MakeThreadLocalCoroutineAllocator();
+        while (m_Running)
+        {
              m_Semaphore.acquire();
 
              InputData input_data;
              if (m_InputQueue.TryDequeue(input_data))
              {
-                 OutputData output_data
+                 if (input_data.m_Coro)
                  {
-                     .m_File = MappedFile{ input_data.m_FileName },
-                     .m_Callback = std::move(input_data.m_Callback)
-                 };
+                     input_data.m_Coro->Resume();
+                 }
+                 else
+                 {
+                     OutputData output_data
+                     {
+                         .m_File = MappedFile{ input_data.m_FileName },
+                         .m_Callback = std::move(input_data.m_Callback)
+                     };
 
-                 while (!m_OutputQueue.Emplace(std::move(output_data)))
-                 {
-                     std::this_thread::yield();
+                     while (!m_OutputQueue.Emplace(std::move(output_data)))
+                     {
+                         std::this_thread::yield();
+                     }
                  }
 
                  ++m_Responses;
              }
-         }
+        }
     }
 }

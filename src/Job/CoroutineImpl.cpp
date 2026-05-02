@@ -2,12 +2,16 @@ module;
 
 #include <memory>
 #include <coroutine>
+#include <cassert>
 
 module YT:CoroutineImpl;
 
+import :Types;
+import :JobTypes;
 import :Coroutine;
 import :JobManager;
-import :JobTypes;
+import :BackgroundTaskManager;
+import :FileMapper;
 import :WorkerThread;
 
 namespace YT
@@ -38,20 +42,32 @@ namespace YT
         g_ThreadContextType = context;
     }
 
+    void * AllocateCoroutine(std::size_t size) noexcept
+    {
+        if (size <= MaxCoroAllocSize)
+        {
+            return g_CoroAllocator.Allocate();
+        }
+
+        return std::malloc(size);
+    }
+
+    void FreeCoroutine(void * ptr, std::size_t size) noexcept
+    {
+        if (size <= MaxCoroAllocSize)
+        {
+            g_CoroAllocator.Free(ptr);
+        }
+
+        std::free(ptr);
+    }
+
     void MakeThreadLocalCoroutineAllocator() noexcept
     {
         g_CoroAllocator.MakeLocalAllocator();
     }
 
-    CoroBase::~CoroBase()
-    {
-        if (m_CoroutineHandle)
-        {
-            m_CoroutineHandle.destroy();
-        }
-    }
-
-    void CoroBase::RunFromList(JobCompletionTrackingBlock * tracking_block)
+    void CoroBase::RunFromList(JobCompletionTrackingBlock * tracking_block) noexcept
     {
         m_IncrementCounters = tracking_block;
         m_OwningThread = GetThreadId();
@@ -70,26 +86,19 @@ namespace YT
         }
     }
 
-    void CoroBase::Resume() const
+    void CoroBase::ScheduleForward() noexcept
     {
-        if (!m_Complete)
-        {
-            m_CoroutineHandle.resume();
-        }
-        else if (m_ReturnHandle)
-        {
-            m_ReturnHandle.resume();
-        }
+        assert(!m_Started);
+        m_Started = true;
+
+        Schedule(m_CoroutineType, m_CoroutineHandle);
     }
 
-    std::suspend_always CoroBase::initial_suspend() noexcept
+    void CoroBase::ScheduleBackward() noexcept
     {
-        return {};
-    }
-
-    std::suspend_always CoroBase::final_suspend() noexcept
-    {
+        assert(!m_Complete);
         m_Complete = true;
+
         if (m_IncrementCounters)
         {
             if (m_OwningThread == GetThreadId())
@@ -102,38 +111,43 @@ namespace YT
             }
         }
 
-        if (m_ReturnHandle)
+        Schedule(m_ReturnType, m_ReturnHandle);
+    }
+
+    void CoroBase::Schedule(ThreadContextType thread_context, std::coroutine_handle<> coroutine) noexcept
+    {
+        if (coroutine)
         {
-            if (m_ReturnType == ThreadContextType::Main || m_ReturnType == ThreadContextType::Job)
+            if (thread_context == ThreadContextType::Main || thread_context == ThreadContextType::Job)
             {
                 g_JobManager->PushJob(*this);
             }
-            else if (m_ReturnType == ThreadContextType::Background)
+            else if (thread_context == ThreadContextType::Background)
             {
-                
+                g_BackgroundTaskManager.PushWork([this] { Resume(); });
+            }
+            else if (thread_context == ThreadContextType::FileMapper)
+            {
+                g_FileMapper.PushCoro(this);
             }
             else
             {
+                // Not sure where to put this so just go on the main thread queue
                 g_MainThreadQueue.PushWork([this] { Resume(); });
             }
         }
-
-        return {};
     }
 
-    void CoroBase::await_suspend(std::coroutine_handle<> coro) noexcept
+    void CoroBase::Resume() const noexcept
     {
-        m_ReturnHandle = coro;
-    }
-
-    void CoroBase::operator delete (void * ptr, std::size_t size) noexcept
-    {
-        if (size > MaxCoroAllocSize)
+        if (!m_Complete)
         {
-            std::free(ptr);
-            return;
+            m_CoroutineHandle.resume();
         }
-
-        g_CoroAllocator.Free(ptr);
+        else if (m_ReturnHandle)
+        {
+            m_ReturnHandle.resume();
+        }
     }
+
 }

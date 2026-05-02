@@ -30,6 +30,8 @@ namespace YT
     {
     public:
         static constexpr std::size_t NumJobThreads = 4;
+        static constexpr std::size_t NumBackgroundThreads = 4;
+        static constexpr std::size_t NumFileMapperThreads = 8;
     };
 
     export template<typename T>

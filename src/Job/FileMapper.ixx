@@ -6,12 +6,15 @@ module;
 #include <thread>
 #include <semaphore>
 #include <functional>
+#include <coroutine>
 
 export module YT:FileMapper;
 
 import :Types;
+import :JobTypes;
 import :MultiProducerMultiConsumer;
 import :MultiProducerSingleConsumer;
+import :Coroutine;
 
 namespace YT
 {
@@ -44,7 +47,7 @@ namespace YT
     {
     public:
 
-        static constexpr std::size_t NumThreads = 4;
+        static constexpr std::size_t NumThreads = Threading::NumFileMapperThreads;
 
         FileMapper() noexcept;
 
@@ -55,7 +58,9 @@ namespace YT
 
         ~FileMapper();
 
-        void MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback, bool immediate_callback) noexcept;
+        void MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept;
+
+        void PushCoro(CoroBase * coro) noexcept;
 
         void Update() noexcept;
         void SyncAllFileLoads() noexcept;
@@ -79,8 +84,8 @@ namespace YT
     private:
         struct InputData
         {
+            CoroBase * m_Coro = nullptr;
             String m_FileName;
-            bool m_ImmediateCallback;
             Function<void(MappedFile &&)> m_Callback;
         };
 
@@ -105,4 +110,9 @@ namespace YT
     };
 
     FileMapper g_FileMapper;
+
+    export Coro<MappedFile, ThreadContextType::FileMapper> MapFileAsync(const StringView & file_name)
+    {
+        co_return MappedFile(file_name);
+    }
 }

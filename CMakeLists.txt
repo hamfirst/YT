@@ -61,6 +61,8 @@ set(YT_MODULE_SOURCES
         src/Init/Init.ixx
         src/Init/InitImpl.cpp
 
+        src/Job/BackgroundTaskManager.ixx
+        src/Job/BackgroundTaskManagerImpl.cpp
         src/Job/Coroutine.ixx
         src/Job/CoroutineImpl.cpp
         src/Job/FileMapper.ixx

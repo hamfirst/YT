@@ -9,12 +9,14 @@ module;
 export module YT;
 
 export import :Types;
+export import :JobTypes;
 export import :BlockTable;
 export import :FixedBlockAllocator;
-export import :Init;
-export import :Delegate;
 export import :MultiProducerSingleConsumer;
 export import :MultiProducerMultiConsumer;
+export import :Init;
+export import :Delegate;
+export import :Coroutine;
 export import :Window;
 export import :Widget;
 export import :Drawer;
