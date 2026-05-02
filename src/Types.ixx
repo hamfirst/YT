@@ -103,7 +103,7 @@ namespace YT
     }
 
     export template <typename... Args>
-    void PrintStr(std::string_view str)
+    void PrintStr(StringView str)
     {
         std::println("{}", str);
     }

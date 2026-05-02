@@ -19,11 +19,14 @@ namespace YT
 
         static constexpr std::size_t NumThreads = Threading::NumFileMapperThreads;
 
+        static bool CreateBackgroundTaskManager() noexcept;
+
         BackgroundTaskManager();
         ~BackgroundTaskManager();
 
         void PushWork(Function<void()> && work);
 
+        void SignalWork();
     private:
 
         void ThreadMain();
@@ -36,5 +39,5 @@ namespace YT
         std::counting_semaphore<> m_Semaphore;
     };
 
-    BackgroundTaskManager g_BackgroundTaskManager;
+    export UniquePtr<BackgroundTaskManager> g_BackgroundTaskManager;
 }

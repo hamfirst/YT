@@ -11,6 +11,7 @@ import :JobManager;
 import :WindowManager;
 import :RenderManager;
 import :QuadRender;
+import :BackgroundTaskManager;
 import :FileMapper;
 
 namespace YT
@@ -18,20 +19,39 @@ namespace YT
     bool Init(const ApplicationInitInfo& init_info) noexcept
     {
         g_InitTime = std::chrono::high_resolution_clock::now();
-        g_FileMapper.CallDeferred();
+
+        SetCurrentThreadContext(ThreadContextType::Main);
+        SetThreadId(0);
 
         if (!JobManager::CreateJobManager())
         {
+            FatalPrint("Failed to create JobManager");
             return false;
         }
 
+        if (!FileMapper::CreateFileMapper())
+        {
+            FatalPrint("Failed to create FileMapper");
+            return false;
+        }
+
+        if (!BackgroundTaskManager::CreateBackgroundTaskManager())
+        {
+            FatalPrint("Failed to create BackgroundTaskManager");
+            return false;
+        }
+
+        FileMapper::CallDeferred();
+
         if (!WindowManager::CreateWindowManager(init_info))
         {
+            FatalPrint("Failed to create WindowManager");
             return false;
         }
 
         if (!RenderManager::CreateRenderManager(init_info))
         {
+            FatalPrint("Failed to create RenderManager");
             return false;
         }
 

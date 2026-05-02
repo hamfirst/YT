@@ -8,5 +8,5 @@ import :WorkerThreadQueue;
 namespace YT
 {
     WorkerThreadQueue g_MainThreadQueue(ThreadContextType::Main);
-
+    WorkerThreadQueue g_FreeTypeThreadQueue(ThreadContextType::FreeType);
 }

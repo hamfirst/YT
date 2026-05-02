@@ -1130,7 +1130,7 @@ namespace YT
             m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
         }
 
-        g_FileMapper.SyncAllFileLoads();
+        g_FileMapper->SyncAllFileLoads();
 
         DeferredImageLoad * deferred_image_load = g_DeferredImageLoadHead;
         while (deferred_image_load)

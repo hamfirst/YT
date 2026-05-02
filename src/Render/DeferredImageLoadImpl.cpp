@@ -38,7 +38,7 @@ namespace YT
     {
         FileMapper::PushDeferred([this, file_name = String{file_name}]
         {
-            g_FileMapper.MapFile(file_name, [this](MappedFile && file)
+            g_FileMapper->MapFile(file_name, [this](MappedFile && file)
             {
                 m_ImageData = file.GetData();
                 m_MappedFile.emplace(std::move(file));

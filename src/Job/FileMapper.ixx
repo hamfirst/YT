@@ -35,6 +35,8 @@ namespace YT
 
         [[nodiscard]] Span<const std::byte> GetData() const noexcept;
 
+        [[nodiscard]] StringView AsStringView() const noexcept;
+
     private:
 
         int m_FD = -1;
@@ -48,6 +50,8 @@ namespace YT
     public:
 
         static constexpr std::size_t NumThreads = Threading::NumFileMapperThreads;
+
+        static bool CreateFileMapper() noexcept;
 
         FileMapper() noexcept;
 
@@ -109,7 +113,7 @@ namespace YT
         static DeferredLoad * s_DeferredLoad;
     };
 
-    FileMapper g_FileMapper;
+    UniquePtr<FileMapper> g_FileMapper;
 
     export Coro<MappedFile, ThreadContextType::FileMapper> MapFileAsync(const StringView & file_name)
     {

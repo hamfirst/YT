@@ -102,6 +102,29 @@ namespace YT
         return { static_cast<const std::byte *>(m_Data), m_Size };
     }
 
+    StringView MappedFile::AsStringView() const noexcept
+    {
+        return { static_cast<char *>(m_Data), m_Size };
+    }
+
+    bool FileMapper::CreateFileMapper() noexcept
+    {
+        if (g_FileMapper)
+        {
+            return true;
+        }
+
+        try
+        {
+            g_FileMapper = MakeUnique<FileMapper>();
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
     FileMapper::FileMapper() noexcept :
         m_Semaphore(0)
     {
@@ -208,6 +231,8 @@ namespace YT
     void FileMapper::RunThread(int thread_index) noexcept
     {
         MakeThreadLocalCoroutineAllocator();
+        SetCurrentThreadContext(ThreadContextType::FileMapper);
+
         while (m_Running)
         {
              m_Semaphore.acquire();

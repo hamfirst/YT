@@ -36,6 +36,14 @@ public:
     };
 };
 
+BackgroundTask<int> TestCoro()
+{
+    MappedFile file = co_await MapFileAsync("../shaders/TestTriangle.vert");
+
+    PrintStr(file.AsStringView());
+    co_return 42;
+}
+
 int main()
 {
     ApplicationInitInfo init_info
@@ -49,7 +57,12 @@ int main()
         return ENODEV;
     }
 
-    std::vector<WindowRef> windows;
+    auto coro = TestCoro();
+    coro.RunSynchronous();
+    int x = coro.GetResult();
+    printf("%d\n", x);
+
+    Vector<WindowRef> windows;
     for (int i = 0; i < 1; ++i)
     {
         WindowInitInfo window_init_info;

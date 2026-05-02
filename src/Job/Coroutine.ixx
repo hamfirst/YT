@@ -6,6 +6,7 @@ module;
 #include <array>
 #include <coroutine>
 #include <concepts>
+#include <mutex>
 #include <type_traits>
 
 export module YT:Coroutine;
@@ -45,6 +46,8 @@ namespace YT
         void Resume() const noexcept;
         void RunFromList(JobCompletionTrackingBlock * tracking_block) noexcept;
 
+        void RunSynchronous();
+
     protected:
 
         void ScheduleForward() noexcept;
@@ -63,6 +66,7 @@ namespace YT
         ThreadContextType m_ReturnType = {};
         JobCompletionTrackingBlock * m_IncrementCounters = nullptr;
         int m_OwningThread = -1;
+        Mutex * m_Mutex = nullptr;
         bool m_Started : 1 = false;
         bool m_Complete : 1 = false;
     };
@@ -131,7 +135,7 @@ namespace YT
             : m_Promise(promise)
         {
             m_Promise->m_Coro = this;
-            m_CoroutineHandle = std::coroutine_handle<>::from_address(promise);
+            m_CoroutineHandle = std::coroutine_handle<promise_type>::from_promise(*promise);
             m_CoroutineType = ThreadType;
         }
 
@@ -141,6 +145,12 @@ namespace YT
             {
                 m_CoroutineHandle.destroy();
             }
+        }
+
+        ReturnType GetResult() noexcept
+        {
+            ReturnType * result = reinterpret_cast<ReturnType *>(&m_Promise->m_ReturnStorage.m_Array);
+            return std::move(*result);
         }
 
         static bool await_ready() noexcept { return false; }

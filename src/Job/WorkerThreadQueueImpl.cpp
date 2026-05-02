@@ -11,6 +11,7 @@ import :Types;
 import :Coroutine;
 import :WorkerThread;
 import :MultiProducerSingleConsumer;
+import :BackgroundTaskManager;
 
 namespace YT
 {
@@ -25,6 +26,13 @@ namespace YT
         while (!m_Queue.TryEnqueue(std::move(work)))
         {
             std::this_thread::yield();
+        }
+
+        if (m_ThreadContextType != ThreadContextType::Main &&
+            m_ThreadContextType != ThreadContextType::Job &&
+            m_ThreadContextType != ThreadContextType::FileMapper)
+        {
+            g_BackgroundTaskManager->SignalWork();
         }
     }
 

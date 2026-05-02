@@ -57,6 +57,7 @@ namespace YT
         if (size <= MaxCoroAllocSize)
         {
             g_CoroAllocator.Free(ptr);
+            return;
         }
 
         std::free(ptr);
@@ -86,10 +87,24 @@ namespace YT
         }
     }
 
+    void CoroBase::RunSynchronous()
+    {
+        Mutex mutex;
+        m_Mutex = &mutex;
+        m_Mutex->lock();
+
+        ScheduleForward();
+        m_Mutex->lock();
+
+        m_Mutex = nullptr;
+    }
+
     void CoroBase::ScheduleForward() noexcept
     {
         assert(!m_Started);
         m_Started = true;
+
+        m_ReturnType = GetCurrentThreadContext();
 
         Schedule(m_CoroutineType, m_CoroutineHandle);
     }
@@ -112,6 +127,11 @@ namespace YT
         }
 
         Schedule(m_ReturnType, m_ReturnHandle);
+
+        if (m_Mutex)
+        {
+            m_Mutex->unlock();
+        }
     }
 
     void CoroBase::Schedule(ThreadContextType thread_context, std::coroutine_handle<> coroutine) noexcept
@@ -124,11 +144,11 @@ namespace YT
             }
             else if (thread_context == ThreadContextType::Background)
             {
-                g_BackgroundTaskManager.PushWork([this] { Resume(); });
+                g_BackgroundTaskManager->PushWork([this] { Resume(); });
             }
             else if (thread_context == ThreadContextType::FileMapper)
             {
-                g_FileMapper.PushCoro(this);
+                g_FileMapper->PushCoro(this);
             }
             else
             {

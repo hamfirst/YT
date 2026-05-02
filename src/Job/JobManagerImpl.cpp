@@ -166,6 +166,7 @@ namespace YT
         g_NextJobID = (thread_id + 1) % NumJobThreads;
 
         MakeThreadLocalCoroutineAllocator();
+        SetCurrentThreadContext(ThreadContextType::Job);
 
         while (!m_Quit.load(std::memory_order_relaxed))
         {
