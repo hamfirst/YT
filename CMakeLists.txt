@@ -61,10 +61,16 @@ set(YT_MODULE_SOURCES
         src/Init/Init.ixx
         src/Init/InitImpl.cpp
 
+        src/Job/Coroutine.ixx
+        src/Job/CoroutineImpl.cpp
+        src/Job/FileMapper.ixx
+        src/Job/FileMapperImpl.cpp
         src/Job/JobManager.ixx
         src/Job/JobManagerImpl.cpp
-        src/Job/FileMapper.ixx
-        src/Job/FileMapperImpl.ixx
+        src/Job/JobTypes.ixx
+        src/Job/WorkerThread.ixx
+        src/Job/WorkerThreadQueue.ixx
+        src/Job/WorkerThreadQueueImpl.cpp
 
         src/Queues/MultiProducerMultiConsumer.ixx
         src/Queues/MultiProducerSingleConsumer.ixx

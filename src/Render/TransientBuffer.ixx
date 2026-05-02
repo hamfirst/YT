@@ -181,7 +181,7 @@ namespace YT
         vma::UniqueBuffer m_Buffer;
         vma::UniqueAllocation m_Allocation;
 
-        using BufferSizeType = std::conditional_t<Threading::NumThreads == 1, TransientBufferSize<std::size_t>, TransientBufferSize<std::atomic<std::size_t>>>;
+        using BufferSizeType = std::conditional_t<Threading::NumJobThreads == 1, TransientBufferSize<std::size_t>, TransientBufferSize<std::atomic<std::size_t>>>;
         BufferSizeType m_BufferSize;
 
         std::byte * m_Ptr = nullptr;

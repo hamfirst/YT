@@ -23,7 +23,6 @@ export import :RenderReflect;
 export import :ImageReference;
 export import :DeferredImageLoad;
 export import :WindowTypes;
-export import :JobManager;
 export import :FileMapper;
 
 namespace YT

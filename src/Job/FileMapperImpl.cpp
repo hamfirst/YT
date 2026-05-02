@@ -39,7 +39,7 @@ namespace YT
             return;
         }
 
-        void* mapped_data = mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+        void * mapped_data = mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
 
         if (mapped_data == MAP_FAILED)
         {
@@ -128,11 +128,12 @@ namespace YT
         }
     }
 
-    void FileMapper::MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept
+    void FileMapper::MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback, bool immediate_callback) noexcept
     {
         InputData input_data
         {
             .m_FileName = String(file_name),
+            .m_ImmediateCallback = immediate_callback,
             .m_Callback = std::move(callback)
         };
 

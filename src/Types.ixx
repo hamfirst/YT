@@ -29,7 +29,7 @@ namespace YT
     export class Threading
     {
     public:
-        static constexpr std::size_t NumThreads = 1;
+        static constexpr std::size_t NumJobThreads = 4;
     };
 
     export template<typename T>

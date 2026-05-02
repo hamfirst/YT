@@ -5,15 +5,17 @@ module;
 
 #include <thread>
 
-module YT:WorkerThreadImpl;
+module YT:WorkerThreadQueueImpl;
 
 import :Types;
+import :Coroutine;
 import :WorkerThread;
 import :MultiProducerSingleConsumer;
 
 namespace YT
 {
-    WorkerThreadQueue::WorkerThreadQueue()
+    WorkerThreadQueue::WorkerThreadQueue(ThreadContextType thread_context_type)
+        : m_ThreadContextType(thread_context_type)
     {
 
     }
@@ -30,6 +32,9 @@ namespace YT
     {
         if (m_Mutex.try_lock())
         {
+            ThreadContextType old_thread_context = GetCurrentThreadContext();
+            SetCurrentThreadContext(m_ThreadContextType);
+
             Function<void()> work;
             while (m_Queue.TryDequeue(work))
             {
@@ -37,6 +42,8 @@ namespace YT
             }
 
             m_Mutex.unlock();
+
+            SetCurrentThreadContext(old_thread_context);
         }
     }
 }

@@ -74,7 +74,7 @@ namespace YT
             m_FirstDrawElemIndex = index;
         }
 
-        if constexpr (Threading::NumThreads > 1)
+        if constexpr (Threading::NumJobThreads > 1)
         {
             if (m_PreviousDrawElemIndex.has_value() && index != m_PreviousDrawElemIndex.value() + 1)
             {
@@ -101,7 +101,7 @@ namespace YT
         {
             if (m_DrawType == DrawType::Quad)
             {
-                if (Threading::NumThreads > 1 && !m_ConsecutiveDraws)
+                if (Threading::NumJobThreads > 1 && !m_ConsecutiveDraws)
                 {
                     auto [ptr, handle] =
                         g_RenderManager->ReserveBufferSpace(g_RenderManager->GetIndexBufferTypeId(), m_DrawElemIndexData.size());

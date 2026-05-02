@@ -55,7 +55,7 @@ namespace YT
 
         ~FileMapper();
 
-        void MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept;
+        void MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback, bool immediate_callback) noexcept;
 
         void Update() noexcept;
         void SyncAllFileLoads() noexcept;
@@ -80,6 +80,7 @@ namespace YT
         struct InputData
         {
             String m_FileName;
+            bool m_ImmediateCallback;
             Function<void(MappedFile &&)> m_Callback;
         };
 
