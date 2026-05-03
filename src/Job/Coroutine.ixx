@@ -2,23 +2,24 @@ module;
 
 #include <cstddef>
 #include <cstdint>
+#include <cassert>
 #include <atomic>
+#include <thread>
 #include <array>
 #include <coroutine>
 #include <concepts>
 #include <mutex>
 #include <type_traits>
+#include <utility>
 
 export module YT:Coroutine;
 
 import :Types;
 import :JobTypes;
+import :Wait;
 
 namespace YT
 {
-    export int GetThreadId() noexcept;
-    export void SetThreadId(int thread_id) noexcept;
-
     export ThreadContextType GetCurrentThreadContext() noexcept;
     export void SetCurrentThreadContext(ThreadContextType context) noexcept;
 
@@ -26,6 +27,8 @@ namespace YT
 
     void * AllocateCoroutine(std::size_t size) noexcept;
     void FreeCoroutine(void * ptr, std::size_t size) noexcept;
+
+    void RunMainThreadJobsIfNeeded();
 
     export template <typename ReturnType>
     struct ReturnStorage
@@ -42,9 +45,17 @@ namespace YT
     class CoroBase
     {
     public:
+        CoroBase() = default;
+        CoroBase(const CoroBase &) = delete;
+        CoroBase(CoroBase && rhs) noexcept;
+
+        CoroBase & operator= (const CoroBase &) = delete;
+        CoroBase & operator= (CoroBase && rhs) noexcept;
+
+        ~CoroBase();
 
         void Resume() const noexcept;
-        void RunFromList(JobCompletionTrackingBlock * tracking_block) noexcept;
+        void RunFromList(JobCompletionTrackingInfo * tracking_block) noexcept;
 
         void RunSynchronous();
 
@@ -53,20 +64,28 @@ namespace YT
         void ScheduleForward() noexcept;
         void ScheduleBackward() noexcept;
 
+        void * GetResultPtr() noexcept;
+        const void * GetResultPtr() const noexcept;
+
     private:
 
         void Schedule(ThreadContextType thread_context, std::coroutine_handle<> coroutine) noexcept;
 
     protected:
-        friend class JobManager;
+
+        template <typename ReturnType>
+        friend class CoroBundle;
 
         std::coroutine_handle<> m_CoroutineHandle = {};
         ThreadContextType m_CoroutineType = {};
         std::coroutine_handle<> m_ReturnHandle = {};
         ThreadContextType m_ReturnType = {};
-        JobCompletionTrackingBlock * m_IncrementCounters = nullptr;
-        int m_OwningThread = -1;
+        JobCompletionTrackingInfo * m_IncrementCounters = nullptr;
+        std::thread::id m_OwningThread = {};
         Mutex * m_Mutex = nullptr;
+        void * m_Promise = nullptr;
+        void * m_ResultPtr = nullptr;
+        CoroBase ** m_PromiseCoroPtr = nullptr;
         bool m_Started : 1 = false;
         bool m_Complete : 1 = false;
     };
@@ -80,7 +99,8 @@ namespace YT
 
         struct promise_type
         {
-            Coro * m_Coro = nullptr;
+            CoroBase * m_Coro = nullptr;
+
             bool m_HasReturnValue = false;
             ReturnStorage<ReturnType> m_ReturnStorage;
 
@@ -119,7 +139,8 @@ namespace YT
             {
                 new (&m_ReturnStorage.m_Array) ReturnType(std::forward<ReturnValueType>(value));
 
-                m_Coro->ScheduleBackward();
+                Coro * coro = static_cast<Coro *>(m_Coro);
+                coro->ScheduleBackward();
             }
 
             void * operator new(std::size_t size) noexcept { return AllocateCoroutine(size); }
@@ -132,24 +153,27 @@ namespace YT
         }
 
         explicit Coro(promise_type * promise) noexcept
-            : m_Promise(promise)
         {
-            m_Promise->m_Coro = this;
+            promise->m_Coro = this;
+
+            m_Promise = promise;
+            m_ResultPtr = &promise->m_ReturnStorage.m_Array;
+            m_PromiseCoroPtr = &promise->m_Coro;
             m_CoroutineHandle = std::coroutine_handle<promise_type>::from_promise(*promise);
             m_CoroutineType = ThreadType;
         }
 
-        ~Coro()
-        {
-            if (m_CoroutineHandle)
-            {
-                m_CoroutineHandle.destroy();
-            }
-        }
+        Coro(const Coro & rhs) = delete;
+        Coro(Coro && rhs) = default;
+
+        Coro & operator=(const Coro & rhs) = delete;
+        Coro & operator=(Coro && rhs) = default;
 
         ReturnType GetResult() noexcept
         {
-            ReturnType * result = reinterpret_cast<ReturnType *>(&m_Promise->m_ReturnStorage.m_Array);
+            promise_type * promise = static_cast<promise_type *>(m_Promise);
+
+            ReturnType * result = reinterpret_cast<ReturnType *>(&promise->m_ReturnStorage.m_Array);
             return std::move(*result);
         }
 
@@ -164,7 +188,9 @@ namespace YT
         ReturnType await_resume() noexcept
             requires(std::move_constructible<ReturnType> && !std::same_as<ReturnType, void>)
         {
-            ReturnType * result = reinterpret_cast<ReturnType *>(&m_Promise->m_ReturnStorage.m_Array);
+            promise_type * promise = static_cast<promise_type *>(m_Promise);
+
+            ReturnType * result = reinterpret_cast<ReturnType *>(&promise->m_ReturnStorage.m_Array);
             return std::move(*result);
         }
 
@@ -173,10 +199,83 @@ namespace YT
         {
 
         }
+    };
 
-    protected:
+    template <typename ReturnType>
+    class CoroBundle final
+    {
+    public:
 
-        promise_type * m_Promise = nullptr;
+        void Reserve(std::size_t count)
+        {
+            m_OwnedJobs.reserve(count);
+        }
+
+        /**
+         * @brief Adds a job to the list.
+         *
+         * @param coro The job to add to the list
+         * @note The job will be executed immediately
+         */
+        template <ThreadContextType ThreadType>
+        void PushJob(Coro<ReturnType, ThreadType> && coro) noexcept
+        {
+            // We have to pre-reserve the entire array so we have stable pointers
+            assert(m_OwnedJobs.size() < m_OwnedJobs.capacity());
+
+            m_Target++;
+            CoroBase & list_coro = m_OwnedJobs.emplace_back(std::forward<CoroBase>(coro));
+            list_coro.RunFromList(&m_Counters);
+        }
+
+        /**
+         * @brief Waits for all jobs in the list to complete.
+         *
+         * Blocks until the completion counter reaches the target value.
+         */
+        void WaitForCompletion() const noexcept
+        {
+            if (m_OwnedJobs.empty())
+            {
+                return;
+            }
+
+            while (true)
+            {
+                RunMainThreadJobsIfNeeded();
+
+                MonitorAddr(&m_Counters.m_RemoteCount);
+
+                if (m_Counters.m_LocalCount + m_Counters.m_RemoteCount >= m_Target)
+                {
+                    break;
+                }
+
+                WaitForAddr(150000);
+            }
+        }
+
+        /**
+         * @brief Returns the result of a job at the specified index.
+         *
+         * @param index The index of the job in the list
+         * @return The job's return value
+         * @pre The job at the specified index must have completed
+         */
+        std::add_lvalue_reference_t<ReturnType> operator[](std::size_t index)
+        {
+            return *static_cast<ReturnType *>(m_OwnedJobs[index].GetResultPtr());
+        }
+
+        std::add_lvalue_reference_t<const ReturnType> operator[](std::size_t index) const
+        {
+            return *static_cast<const ReturnType *>(m_OwnedJobs[index].GetResultPtr());
+        }
+
+    private:
+        Vector<CoroBase> m_OwnedJobs;
+        JobCompletionTrackingInfo m_Counters;
+        int m_Target = 0;
     };
 
     export template <typename ReturnType = void>
@@ -184,5 +283,8 @@ namespace YT
 
     export template <typename ReturnType = void>
     using BackgroundTask = Coro<ReturnType, ThreadContextType::Background>;
+
+    export template <typename ReturnType = void>
+    using MainThreadTask = Coro<ReturnType, ThreadContextType::Main>;
 }
 

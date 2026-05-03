@@ -57,11 +57,6 @@ int main()
         return ENODEV;
     }
 
-    auto coro = TestCoro();
-    coro.RunSynchronous();
-    int x = coro.GetResult();
-    printf("%d\n", x);
-
     Vector<WindowRef> windows;
     for (int i = 0; i < 1; ++i)
     {

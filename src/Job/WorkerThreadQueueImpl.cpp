@@ -36,22 +36,26 @@ namespace YT
         }
     }
 
-    void WorkerThreadQueue::TryExecuteWork() noexcept
+    int WorkerThreadQueue::TryExecuteWork() noexcept
     {
+        int work_completed = 0;
         if (m_Mutex.try_lock())
         {
-            ThreadContextType old_thread_context = GetCurrentThreadContext();
-            SetCurrentThreadContext(m_ThreadContextType);
-
             Function<void()> work;
             while (m_Queue.TryDequeue(work))
             {
+                work_completed++;
                 work();
             }
 
             m_Mutex.unlock();
-
-            SetCurrentThreadContext(old_thread_context);
         }
+
+        return work_completed;
+    }
+
+    ThreadContextType WorkerThreadQueue::GetThreadContextType() const noexcept
+    {
+        return m_ThreadContextType;
     }
 }

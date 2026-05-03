@@ -19,11 +19,10 @@ import :FileMapper;
 import :MultiProducerMultiConsumer;
 import :MultiProducerSingleConsumer;
 import :Coroutine;
+import :Wait;
 
 namespace YT
 {
-    FileMapper::DeferredLoad * FileMapper::s_DeferredLoad = nullptr;
-
     MappedFile::MappedFile(const StringView & file_name) noexcept
     {
         // 1. Open the file
@@ -185,46 +184,17 @@ namespace YT
         m_Semaphore.release();
     }
 
-    void FileMapper::Update() noexcept
-    {
-        OutputData output_data;
-        while (m_OutputQueue.TryDequeue(output_data))
-        {
-            output_data.m_Callback(std::move(output_data.m_File));
-        }
-    }
-
-    void FileMapper::SyncAllFileLoads() noexcept
+    void FileMapper::SyncAll() const noexcept
     {
         while (true)
         {
-            Update();
-
+            MonitorAddr(&m_Responses);
             if (m_Requests.load() == m_Responses.load())
             {
                 break;
             }
 
-            std::this_thread::yield();
-        }
-    }
-
-    void FileMapper::PushDeferred(Function<void()> && func) noexcept
-    {
-        DeferredLoad * deferred_load = new DeferredLoad{ std::move(func), s_DeferredLoad };
-        s_DeferredLoad = deferred_load;
-    }
-
-    void FileMapper::CallDeferred() noexcept
-    {
-        while (s_DeferredLoad != nullptr)
-        {
-            DeferredLoad * deferred_load = s_DeferredLoad;
-            s_DeferredLoad = deferred_load->m_Next;
-
-            deferred_load->m_Callback();
-
-            delete deferred_load;
+            WaitForAddr(150000);
         }
     }
 
@@ -246,16 +216,7 @@ namespace YT
                  }
                  else
                  {
-                     OutputData output_data
-                     {
-                         .m_File = MappedFile{ input_data.m_FileName },
-                         .m_Callback = std::move(input_data.m_Callback)
-                     };
-
-                     while (!m_OutputQueue.Emplace(std::move(output_data)))
-                     {
-                         std::this_thread::yield();
-                     }
+                     input_data.m_Callback(MappedFile{ input_data.m_FileName });
                  }
 
                  ++m_Responses;

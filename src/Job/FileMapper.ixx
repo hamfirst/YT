@@ -63,14 +63,9 @@ namespace YT
         ~FileMapper();
 
         void MapFile(const StringView & file_name, Function<void(MappedFile &&)> && callback) noexcept;
-
         void PushCoro(CoroBase * coro) noexcept;
 
-        void Update() noexcept;
-        void SyncAllFileLoads() noexcept;
-
-        static void PushDeferred(Function<void()> && func) noexcept;
-        static void CallDeferred() noexcept;
+        void SyncAll() const noexcept;
 
     private:
 
@@ -90,27 +85,11 @@ namespace YT
         {
             CoroBase * m_Coro = nullptr;
             String m_FileName;
-            Function<void(MappedFile &&)> m_Callback;
-        };
-
-        struct OutputData
-        {
-            MappedFile m_File;
+            bool m_CallbackInThread = false;
             Function<void(MappedFile &&)> m_Callback;
         };
 
         MultiProducerMultiConsumer<InputData, 1024> m_InputQueue;
-        MultiProducerSingleConsumer<OutputData, 1024> m_OutputQueue;
-
-    private:
-
-        struct DeferredLoad
-        {
-            Function<void()> m_Callback;
-            DeferredLoad * m_Next = nullptr;
-        };
-
-        static DeferredLoad * s_DeferredLoad;
     };
 
     UniquePtr<FileMapper> g_FileMapper;

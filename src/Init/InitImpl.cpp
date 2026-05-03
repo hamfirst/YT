@@ -7,21 +7,24 @@ module YT:InitImpl;
 
 import :Types;
 import :Init;
+import :Wait;
 import :JobManager;
 import :WindowManager;
 import :RenderManager;
 import :QuadRender;
 import :BackgroundTaskManager;
 import :FileMapper;
+import :FontManager;
 
 namespace YT
 {
     bool Init(const ApplicationInitInfo& init_info) noexcept
     {
+        InitWait();
+
         g_InitTime = std::chrono::high_resolution_clock::now();
 
         SetCurrentThreadContext(ThreadContextType::Main);
-        SetThreadId(0);
 
         if (!JobManager::CreateJobManager())
         {
@@ -41,7 +44,11 @@ namespace YT
             return false;
         }
 
-        FileMapper::CallDeferred();
+        if (!FontManager::CreateFontManager())
+        {
+            FatalPrint("Failed to create FontManager");
+            return false;
+        }
 
         if (!WindowManager::CreateWindowManager(init_info))
         {

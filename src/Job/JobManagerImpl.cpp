@@ -21,6 +21,7 @@ import :WorkerThread;
 
 namespace YT
 {
+    thread_local int g_JobThreadID = -1;
     thread_local int g_NextJobID = 0;
 
     bool JobManager::CreateJobManager() noexcept
@@ -43,8 +44,7 @@ namespace YT
 
     JobManager::JobManager()
     {
-        SetThreadId(0);
-
+        g_JobThreadID = 0;
         g_NextJobID = 0;
         for (int i = 1; i < NumJobThreads; ++i)
         {
@@ -79,55 +79,39 @@ namespace YT
         {
             coro.Resume();
         }
-        else if (GetCurrentThreadContext() == ThreadContextType::Job || GetCurrentThreadContext() == ThreadContextType::Main)
-        {
-            assert(m_Running.load(std::memory_order_acquire));
-
-            JobBlock & block = m_Blocks[g_NextJobID][GetThreadId()];
-
-            if (CoroBase * existing_coro = block.m_Coroutine.exchange(&coro, std::memory_order_relaxed))
-            {
-                existing_coro->Resume();
-            }
-
-            g_NextJobID = (g_NextJobID + 1) % NumJobThreads;
-        }
         else
         {
-            while (!m_ExternalJobs.TryEnqueue(&coro))
+            if(m_Running.load(std::memory_order_acquire))
             {
-                std::this_thread::yield();
-            }
-        }
-    }
-
-    void JobManager::RunJobs(const JobCompletionTrackingBlock & tracking_block, int target) noexcept
-    {
-        while (true)
-        {
-            ProcessJobList(GetThreadId());
-
-            // Run main thread jobs
-            std::size_t completion_count = 0;
-            for (int i = 0; i < NumJobThreads; ++i)
-            {
-                if (i == GetThreadId())
+                ThreadContextType current_thread = GetCurrentThreadContext();
+                if (current_thread == ThreadContextType::Job || current_thread== ThreadContextType::Main)
                 {
-                    completion_count += tracking_block[i].m_LocalCount;
+                    assert(g_JobThreadID >= 0);
+
+                    JobBlock & block = m_Blocks[g_NextJobID][g_JobThreadID];
+
+                    if (CoroBase * existing_coro = block.m_Coroutine.exchange(&coro, std::memory_order_relaxed))
+                    {
+                        existing_coro->Resume();
+                    }
+
+                    g_NextJobID = (g_NextJobID + 1) % NumJobThreads;
                 }
                 else
                 {
-                    completion_count += tracking_block[i].m_RemoteCount.load(std::memory_order_relaxed);
+                    while (!m_ExternalJobs.TryEnqueue(&coro))
+                    {
+                        std::this_thread::yield();
+                    }
                 }
             }
-
-            if (completion_count == target)
+            else
             {
-                break;
+                g_MainThreadQueue.PushWork([coro = &coro] { coro->Resume(); });
             }
         }
-    }
 
+    }
 
     bool JobManager::ProcessJobList(int thread_id) noexcept
     {
@@ -162,7 +146,7 @@ namespace YT
 
     void JobManager::JobMain(int thread_id) noexcept
     {
-        SetThreadId(thread_id);
+        g_JobThreadID = thread_id;
         g_NextJobID = (thread_id + 1) % NumJobThreads;
 
         MakeThreadLocalCoroutineAllocator();

@@ -17,8 +17,9 @@ namespace YT
         explicit WorkerThreadQueue(ThreadContextType thread_context_type);
 
         void PushWork(Function<void()> && work) noexcept;
-        void TryExecuteWork() noexcept;
+        int TryExecuteWork() noexcept;
 
+        [[nodiscard]] ThreadContextType GetThreadContextType() const noexcept;
     private:
 
         ThreadContextType m_ThreadContextType;

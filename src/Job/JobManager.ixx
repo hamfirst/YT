@@ -71,19 +71,6 @@ namespace YT
 
         void PushJob(CoroBase & coro) noexcept;
 
-        /**
-         * @brief Executes jobs until the completion counter reaches the target value.
-         * 
-         * Processes jobs on the current thread and main thread jobs if running on thread 0.
-         * Continues until the counter reaches the specified target value.
-         * 
-         * @param tracking_block List of atomic counters used for tracking job completions
-         * @param target Target value for the counter
-         * @pre JobManager must be running (PrepareToRunJobs() has been called)
-         * @note Main thread jobs are only processed when called from thread 0
-         */
-        void RunJobs(const JobCompletionTrackingBlock & tracking_block, int target) noexcept;
-
     private:
 
         /**
@@ -128,63 +115,4 @@ namespace YT
     /// Global JobManager instance
     export UniquePtr<JobManager> g_JobManager;
 
-    /**
-     * @brief Container for managing a list of jobs.
-     * 
-     * Provides a way to group and track the completion of multiple jobs.
-     * Supports waiting for all jobs to complete and accessing their results.
-     * 
-     * @tparam ReturnType The type returned by the jobs in the list
-     */
-    template <typename ReturnType>
-    class JobList final
-    {
-    public:
-
-        void Reserve(std::size_t count)
-        {
-            m_OwnedJobs.reserve(count);
-        }
-
-        /**
-         * @brief Adds a job to the list.
-         * 
-         * @param coro The job to add to the list
-         * @note The job will be executed immediately
-         */
-        void PushJob(JobCoro<ReturnType> && coro) noexcept
-        {
-            coro.RunFromList(&m_Counters);
-            m_Target++;
-
-            m_OwnedJobs.emplace_back(std::move(coro));
-        }
-
-        /**
-         * @brief Waits for all jobs in the list to complete.
-         * 
-         * Blocks until the completion counter reaches the target value.
-         */
-        void WaitForCompletion() const noexcept
-        {
-            g_JobManager->RunJobs(m_Counters, m_Target);
-        }
-
-        /**
-         * @brief Returns the result of a job at the specified index.
-         * 
-         * @param index The index of the job in the list
-         * @return The job's return value
-         * @pre The job at the specified index must have completed
-         */
-        std::add_lvalue_reference_t<ReturnType> operator[](std::size_t index)
-        {
-            return m_OwnedJobs[index].GetResult();
-        }
-
-    private:
-        std::vector<JobCoro<ReturnType>> m_OwnedJobs;
-        JobCompletionTrackingBlock m_Counters;
-        int m_Target = 0;
-    };
 }

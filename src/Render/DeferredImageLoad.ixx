@@ -34,17 +34,18 @@ namespace YT
         const ImageReference & operator -> () const noexcept;
         const ImageReference & operator * () const noexcept;
 
+        static void Start() noexcept;
+        static void Finalize() noexcept;
+
     protected:
 
         friend class RenderManager;
 
-        void Finalize() noexcept;
-
     private:
         Span<const std::byte> m_ImageData;
-        Optional<ImageReference> m_ImageRef;
+        String m_FileName;
 
-        Optional<MappedFile> m_MappedFile;
+        Optional<ImageReference> m_ImageRef;
 
         DeferredImageLoad * m_Next = nullptr;
     };

@@ -65,8 +65,24 @@ namespace YT
 
     void BackgroundTaskManager::SignalWork()
     {
+        m_Requests.fetch_add(1, std::memory_order_release);
         m_Semaphore.release();
     }
+
+    void BackgroundTaskManager::SyncAll() const noexcept
+    {
+        while (true)
+        {
+            MonitorAddr(&m_Responses);
+            if (m_Requests.load() == m_Responses.load())
+            {
+                break;
+            }
+
+            WaitForAddr(150000);
+        }
+    }
+
 
     void BackgroundTaskManager::ThreadMain()
     {
@@ -81,10 +97,18 @@ namespace YT
             while (m_Queue.TryDequeue(work))
             {
                 work();
+                m_Responses.fetch_add(1, std::memory_order_acquire);
             }
 
-            SetCurrentThreadContext(ThreadContextType::FreeType);
-            g_FreeTypeThreadQueue.TryExecuteWork();
+            auto ProcessWorkQueue = [&](WorkerThreadQueue & queue) -> void
+            {
+                SetCurrentThreadContext(queue.GetThreadContextType());
+                int work_completed = queue.TryExecuteWork();
+
+                m_Responses.fetch_add(work_completed, std::memory_order_release);
+            };
+
+            ProcessWorkQueue(g_FreeTypeThreadQueue);
 
             SetCurrentThreadContext(ThreadContextType::Background);
         }

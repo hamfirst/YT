@@ -44,6 +44,10 @@ find_package(GTest CONFIG REQUIRED)
 
 set(YT_CPP_SOURCES
         ${PROTO_CLIENT_SRC}
+
+        src/Job/WaitImpl.h
+        src/Job/WaitImpl.cpp
+
         src/External/stb/STBI.cpp
         src/External/vulkan/Vulkan.cpp
         src/External/vma/VMA.cpp
@@ -70,6 +74,7 @@ set(YT_MODULE_SOURCES
         src/Job/JobManager.ixx
         src/Job/JobManagerImpl.cpp
         src/Job/JobTypes.ixx
+        src/Job/Wait.ixx
         src/Job/WorkerThread.ixx
         src/Job/WorkerThreadQueue.ixx
         src/Job/WorkerThreadQueueImpl.cpp
@@ -97,6 +102,9 @@ set(YT_MODULE_SOURCES
         src/Render/ShaderBuilder.ixx
         src/Render/StagingBuffer.ixx
         src/Render/TransientBuffer.ixx
+
+        src/Font/FontManager.ixx
+        src/Font/FontManager.cpp
 
         src/Widget/Widget.ixx
         src/Widget/WidgetRegistry.ixx

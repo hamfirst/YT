@@ -43,6 +43,7 @@ import :RenderReflect;
 import :DeferredImageLoad;
 import :FileMapper;
 import :Drawer;
+import :BackgroundTaskManager;
 
 VKAPI_ATTR static VkBool32 VKAPI_CALL DebugMessageFunc(
     vk::DebugUtilsMessageSeverityFlagBitsEXT message_severity,
@@ -1130,14 +1131,7 @@ namespace YT
             m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
         }
 
-        g_FileMapper->SyncAllFileLoads();
-
-        DeferredImageLoad * deferred_image_load = g_DeferredImageLoadHead;
-        while (deferred_image_load)
-        {
-            deferred_image_load->Finalize();
-            deferred_image_load = deferred_image_load->m_Next;
-        }
+        DeferredImageLoad::Finalize();
     }
 
     void RenderManager::DestroyImage(ImageHandle handle) noexcept

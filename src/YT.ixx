@@ -17,6 +17,7 @@ export import :MultiProducerMultiConsumer;
 export import :Init;
 export import :Delegate;
 export import :Coroutine;
+export import :Wait;
 export import :Window;
 export import :Widget;
 export import :Drawer;

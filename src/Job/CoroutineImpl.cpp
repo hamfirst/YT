@@ -3,6 +3,8 @@ module;
 #include <memory>
 #include <coroutine>
 #include <cassert>
+#include <thread>
+#include <utility>
 
 module YT:CoroutineImpl;
 
@@ -16,21 +18,11 @@ import :WorkerThread;
 
 namespace YT
 {
-    thread_local int g_ThreadID = -1;
     thread_local ThreadContextType g_ThreadContextType = ThreadContextType::Unknown;
 
     static constexpr std::size_t MaxCoroAllocSize = 128;
     ThreadCachedFixedBlockAllocator<std::uint64_t[MaxCoroAllocSize / 8], 4096, 65536> g_CoroAllocator;
 
-    int GetThreadId() noexcept
-    {
-        return g_ThreadID;
-    }
-
-    void SetThreadId(int thread_id) noexcept
-    {
-        g_ThreadID = thread_id;
-    }
 
     ThreadContextType GetCurrentThreadContext() noexcept
     {
@@ -63,28 +55,91 @@ namespace YT
         std::free(ptr);
     }
 
+    void RunMainThreadJobsIfNeeded()
+    {
+        if (GetCurrentThreadContext() == ThreadContextType::Main)
+        {
+            g_MainThreadQueue.TryExecuteWork();
+        }
+    }
+
     void MakeThreadLocalCoroutineAllocator() noexcept
     {
         g_CoroAllocator.MakeLocalAllocator();
     }
 
-    void CoroBase::RunFromList(JobCompletionTrackingBlock * tracking_block) noexcept
+    CoroBase::CoroBase(CoroBase && rhs) noexcept
+        : m_CoroutineHandle(std::exchange(rhs.m_CoroutineHandle, {}))
+        , m_CoroutineType(std::exchange(rhs.m_CoroutineType, ThreadContextType::Unknown))
+        , m_ReturnHandle(std::exchange(rhs.m_ReturnHandle, {}))
+        , m_ReturnType(std::exchange(rhs.m_ReturnType, ThreadContextType::Unknown))
+        , m_IncrementCounters(std::exchange(rhs.m_IncrementCounters, nullptr))
+        , m_OwningThread(std::exchange(rhs.m_OwningThread, std::thread::id{}))
+        , m_Mutex(std::exchange(rhs.m_Mutex, nullptr))
+        , m_Promise(std::exchange(rhs.m_Promise, nullptr))
+        , m_ResultPtr(std::exchange(rhs.m_ResultPtr, nullptr))
+        , m_PromiseCoroPtr(std::exchange(rhs.m_PromiseCoroPtr, nullptr))
+    {
+        // Bit-fields cannot bind to `std::exchange` reference parameters.
+        m_Started = rhs.m_Started;
+        m_Complete = rhs.m_Complete;
+        rhs.m_Started = false;
+        rhs.m_Complete = false;
+
+        if (m_PromiseCoroPtr)
+        {
+            *m_PromiseCoroPtr = this;
+        }
+    }
+
+    CoroBase & CoroBase::operator= (CoroBase && rhs) noexcept
+    {
+        if (this != &rhs)
+        {
+            if (m_CoroutineHandle)
+            {
+                m_CoroutineHandle.destroy();
+            }
+
+            m_CoroutineHandle = std::exchange(rhs.m_CoroutineHandle, {});
+            m_CoroutineType = std::exchange(rhs.m_CoroutineType, ThreadContextType::Unknown);
+            m_ReturnHandle = std::exchange(rhs.m_ReturnHandle, {});
+            m_ReturnType = std::exchange(rhs.m_ReturnType, ThreadContextType::Unknown);
+            m_IncrementCounters = std::exchange(rhs.m_IncrementCounters, nullptr);
+            m_OwningThread = std::exchange(rhs.m_OwningThread, std::thread::id{});
+            m_Mutex = std::exchange(rhs.m_Mutex, nullptr);
+            m_Promise = std::exchange(rhs.m_Promise, nullptr);
+            m_ResultPtr = std::exchange(rhs.m_ResultPtr, nullptr);
+            m_PromiseCoroPtr = std::exchange(rhs.m_PromiseCoroPtr, nullptr);
+            // Bit-fields cannot bind to `std::exchange` reference parameters.
+            m_Started = rhs.m_Started;
+            m_Complete = rhs.m_Complete;
+            rhs.m_Started = false;
+            rhs.m_Complete = false;
+
+            if (m_PromiseCoroPtr)
+            {
+                *m_PromiseCoroPtr = this;
+            }
+        }
+
+        return *this;
+    }
+
+    CoroBase::~CoroBase()
+    {
+        if (m_CoroutineHandle)
+        {
+            m_CoroutineHandle.destroy();
+        }
+    }
+
+    void CoroBase::RunFromList(JobCompletionTrackingInfo * tracking_block) noexcept
     {
         m_IncrementCounters = tracking_block;
-        m_OwningThread = GetThreadId();
+        m_OwningThread = std::this_thread::get_id();
 
-        if (m_CoroutineType == ThreadContextType::Main)
-        {
-            g_MainThreadQueue.PushWork([this] { Resume(); });
-        }
-        else if (m_CoroutineType == ThreadContextType::Job)
-        {
-            g_JobManager->PushJob(*this);
-        }
-        else
-        {
-            FatalPrint("Attempting to run invalid coroutine in job list");
-        }
+        ScheduleForward();
     }
 
     void CoroBase::RunSynchronous()
@@ -116,13 +171,13 @@ namespace YT
 
         if (m_IncrementCounters)
         {
-            if (m_OwningThread == GetThreadId())
+            if (m_OwningThread == std::this_thread::get_id())
             {
-                (*m_IncrementCounters)[GetThreadId()].m_LocalCount++;
+                m_IncrementCounters->m_LocalCount++;
             }
             else
             {
-                (*m_IncrementCounters)[GetThreadId()].m_RemoteCount.fetch_add(1, std::memory_order_relaxed);
+                m_IncrementCounters->m_RemoteCount.fetch_add(1, std::memory_order_relaxed);
             }
         }
 
@@ -132,6 +187,16 @@ namespace YT
         {
             m_Mutex->unlock();
         }
+    }
+
+    void * CoroBase::GetResultPtr() noexcept
+    {
+        return m_ResultPtr;
+    }
+
+    const void * CoroBase::GetResultPtr() const noexcept
+    {
+        return m_ResultPtr;
     }
 
     void CoroBase::Schedule(ThreadContextType thread_context, std::coroutine_handle<> coroutine) noexcept
@@ -162,7 +227,10 @@ namespace YT
     {
         if (!m_Complete)
         {
-            m_CoroutineHandle.resume();
+            if (m_CoroutineHandle)
+            {
+                m_CoroutineHandle.resume();
+            }
         }
         else if (m_ReturnHandle)
         {
