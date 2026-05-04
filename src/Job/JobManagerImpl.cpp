@@ -11,6 +11,7 @@ module;
 #include <mutex>
 #include <semaphore>
 #include <coroutine>
+#include <new>
 
 module YT:JobManagerImpl;
 

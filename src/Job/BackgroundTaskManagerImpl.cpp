@@ -5,6 +5,7 @@ module;
 #include <atomic>
 #include <thread>
 #include <semaphore>
+#include <new>
 
 module YT:BackgroundTaskManagerImpl;
 

@@ -11,6 +11,8 @@ export module YT:DeferredImageLoad;
 
 import :Types;
 import :ImageReference;
+import :ImageLoad;
+import :Coroutine;
 import :FileMapper;
 
 namespace YT
@@ -39,13 +41,16 @@ namespace YT
 
     protected:
 
+        Coro<void, ThreadContextType::AnyThread> AsyncLoad();
+
         friend class RenderManager;
 
     private:
         Span<const std::byte> m_ImageData;
         String m_FileName;
 
-        Optional<ImageReference> m_ImageRef;
+        Optional<ImageLoadInfo> m_ImageLoadInfo;
+        ImageReference m_ImageRef;
 
         DeferredImageLoad * m_Next = nullptr;
     };

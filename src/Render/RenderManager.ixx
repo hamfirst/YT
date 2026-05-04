@@ -34,6 +34,7 @@ import :BitAllocator;
 import :ObjectPool;
 import :DeferredDelete;
 import :Delegate;
+import :CoroEvent;
 
 
 namespace YT
@@ -106,6 +107,8 @@ namespace YT
         [[nodiscard]] MaybeInvalid<Pair<std::byte *, BufferDataHandle>> ReserveBufferSpace(
             BufferTypeId buffer_type_id, std::uint32_t buffer_size) noexcept;
 
+        void CreateInternalTextures() noexcept;
+
         [[nodiscard]] MaybeInvalid<ImageReference> CreateImage(const Span<const std::byte>& image_file_data) noexcept;
         [[nodiscard]] MaybeInvalid<ImageReference> CreateImageFromPixels(
             const Span<const std::byte>& data, std::uint32_t width, std::uint32_t height, ImageFormat format) noexcept;
@@ -121,6 +124,7 @@ namespace YT
 
         void RegisterRenderGlobals();
 
+        CoroEvent & GetImageGenerationReadyEvent() noexcept { return m_ImageGenerationReadyEvent; }
 
         template <typename Callback>
         void PushDeferredDeleteCallback(Callback && callback)
@@ -214,6 +218,8 @@ namespace YT
         ImageTable m_ImageTable;
         ImageReference m_WhiteImage;
         ImageReference m_BlackImage;
+
+        CoroEvent m_ImageGenerationReadyEvent;
 
         struct ImageTransferInfo
         {

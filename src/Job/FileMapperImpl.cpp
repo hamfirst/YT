@@ -6,6 +6,7 @@ module;
 #include <thread>
 #include <semaphore>
 #include <functional>
+#include <new>
 
 
 #include <fcntl.h>

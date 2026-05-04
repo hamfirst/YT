@@ -4,6 +4,7 @@ module;
 //import_std
 
 #include <thread>
+#include <new>
 
 module YT:WorkerThreadQueueImpl;
 

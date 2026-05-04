@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 #set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b")
 #set(CMAKE_CXX_MODULE_STD ON)
-set(CMAKE_CXX_FLAGS "-fmodules -Wno-c23-extensions") #-Wno-interference-size  -freflection -fexpansion-statements
+set(CMAKE_CXX_FLAGS "-fmodules -Wno-c23-extensions -fsanitize=address") #-Wno-interference-size  -freflection -fexpansion-statements
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -69,6 +69,7 @@ set(YT_MODULE_SOURCES
         src/Job/BackgroundTaskManagerImpl.cpp
         src/Job/Coroutine.ixx
         src/Job/CoroutineImpl.cpp
+        src/Job/CoroEvent.ixx
         src/Job/FileMapper.ixx
         src/Job/FileMapperImpl.cpp
         src/Job/JobManager.ixx
@@ -87,6 +88,8 @@ set(YT_MODULE_SOURCES
         src/Render/DeferredDelete.ixx
         src/Render/DeferredImageLoad.ixx
         src/Render/DeferredImageLoadImpl.cpp
+        src/Render/ImageLoad.ixx
+        src/Render/ImageLoad.cpp
         src/Render/Drawer.ixx
         src/Render/DrawerImpl.cpp
         src/Render/ImageBuffer.ixx

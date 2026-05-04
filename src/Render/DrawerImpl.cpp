@@ -63,7 +63,7 @@ namespace YT
             .m_StartTX = glm::vec2(0, 0),
             .m_EndTX = glm::vec2(1, 1),
             .m_Color = color,
-            .m_Texture = image_reference.GetImageIndex()
+            .m_Texture = image_reference ? image_reference.GetImageIndex() : GetDefaultImageReference().GetImageIndex(),
         };
 
         m_DrawCount++;

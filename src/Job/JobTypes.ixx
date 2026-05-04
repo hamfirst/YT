@@ -15,6 +15,7 @@ namespace YT
     export enum class ThreadContextType
     {
         Unknown,
+        AnyThread,
         Main,
         Job,
         Background,

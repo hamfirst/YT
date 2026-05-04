@@ -8,7 +8,9 @@ module;
 #include <array>
 #include <coroutine>
 #include <concepts>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -25,10 +27,11 @@ namespace YT
 
     export void MakeThreadLocalCoroutineAllocator() noexcept;
 
-    void * AllocateCoroutine(std::size_t size) noexcept;
+    void * AllocateCoroutine(std::size_t size, std::align_val_t alignment) noexcept;
     void FreeCoroutine(void * ptr, std::size_t size) noexcept;
 
     void RunMainThreadJobsIfNeeded();
+    void ExecuteSynchronousCoroutineIfNeeded() noexcept;
 
     export template <typename ReturnType>
     struct ReturnStorage
@@ -58,6 +61,7 @@ namespace YT
         void RunFromList(JobCompletionTrackingInfo * tracking_block) noexcept;
 
         void RunSynchronous();
+        void EnqueueCoroutineResume() noexcept;
 
     protected:
 
@@ -69,7 +73,7 @@ namespace YT
 
     private:
 
-        void Schedule(ThreadContextType thread_context, std::coroutine_handle<> coroutine) noexcept;
+        void Schedule(ThreadContextType thread_context, std::coroutine_handle<> coroutine, bool allow_sync_resume) noexcept;
 
     protected:
 
@@ -88,8 +92,15 @@ namespace YT
         CoroBase ** m_PromiseCoroPtr = nullptr;
         bool m_Started : 1 = false;
         bool m_Complete : 1 = false;
+        bool m_HasReturnValue : 1 = false;
     };
 
+    /**
+     * ``co_return`` lowering requires the promise to expose either ``return_void`` or ``return_value``, not both;
+     * constrained overloads do not help. Use ``Coro<void, T>`` (``return_void`` only) vs ``Coro<R, T>`` with ``R``
+     * non-void (``return_value`` only). You cannot partially specialize a nested ``promise_type`` alone; partial
+     * specialization of ``Coro`` is the usual split.
+     */
     export template <typename ReturnType, ThreadContextType ThreadType>
     class Coro : public CoroBase
     {
@@ -102,17 +113,18 @@ namespace YT
             CoroBase * m_Coro = nullptr;
 
             bool m_HasReturnValue = false;
-            ReturnStorage<ReturnType> m_ReturnStorage;
+            alignas(ReturnType) ReturnStorage<ReturnType> m_ReturnStorage;
+
+            promise_type()
+            {
+            }
 
             ~promise_type()
             {
-                if constexpr (!std::is_same_v<ReturnType, void>)
+                if (m_HasReturnValue)
                 {
-                    if (m_HasReturnValue)
-                    {
-                        ReturnType * result = reinterpret_cast<ReturnType *>(&m_ReturnStorage.m_Array[0]);
-                        result->~ReturnType();
-                    }
+                    ReturnType * result = reinterpret_cast<ReturnType *>(&m_ReturnStorage.m_Array[0]);
+                    result->~ReturnType();
                 }
             }
 
@@ -127,23 +139,22 @@ namespace YT
             static std::suspend_always initial_suspend() noexcept { return {}; }
             static std::suspend_always final_suspend() noexcept { return {}; }
 
-            // void return_void() const noexcept
-            //     requires (std::same_as<ReturnType, void>)
-            // {
-            //     m_Coro->ScheduleBackward();
-            // }
-
             template <typename ReturnValueType>
             void return_value(ReturnValueType && value) noexcept
-                requires (std::constructible_from<ReturnType, ReturnValueType> && !std::same_as<ReturnType, void>)
+                requires (std::constructible_from<ReturnType, ReturnValueType>)
             {
-                new (&m_ReturnStorage.m_Array) ReturnType(std::forward<ReturnValueType>(value));
+                std::construct_at(
+                    reinterpret_cast<ReturnType *>(static_cast<void *>(m_ReturnStorage.m_Array)),
+                    std::forward<ReturnValueType>(value));
+                m_HasReturnValue = true;
 
                 Coro * coro = static_cast<Coro *>(m_Coro);
+                coro->m_HasReturnValue = true;
                 coro->ScheduleBackward();
             }
 
-            void * operator new(std::size_t size) noexcept { return AllocateCoroutine(size); }
+            void * operator new(std::size_t size) noexcept { return AllocateCoroutine(size, {}); }
+            void * operator new(std::size_t size, std::align_val_t alignment) noexcept { return AllocateCoroutine(size, alignment); }
             void operator delete (void * ptr, std::size_t size) noexcept { FreeCoroutine(ptr, size); }
         };
 
@@ -186,25 +197,92 @@ namespace YT
         }
 
         ReturnType await_resume() noexcept
-            requires(std::move_constructible<ReturnType> && !std::same_as<ReturnType, void>)
+            requires(std::move_constructible<ReturnType>)
         {
             promise_type * promise = static_cast<promise_type *>(m_Promise);
 
             ReturnType * result = reinterpret_cast<ReturnType *>(&promise->m_ReturnStorage.m_Array);
             return std::move(*result);
         }
+    };
 
-        static void await_resume() noexcept
-            requires(std::same_as<ReturnType, void>)
+    template <ThreadContextType ThreadType>
+    class Coro<void, ThreadType> : public CoroBase
+    {
+    public:
+
+        static_assert(ThreadType != ThreadContextType::Unknown, "ThreadType must be ThreadContextType::Unknown");
+
+        struct promise_type
         {
+            CoroBase * m_Coro = nullptr;
 
+            static void unhandled_exception() noexcept
+            {
+                FatalPrint("Unhandled exception in coroutine");
+            }
+
+            auto get_return_object() noexcept { return Coro{this}; }
+            static auto get_return_object_on_allocation_failure() noexcept { return Coro(); }
+
+            static std::suspend_always initial_suspend() noexcept { return {}; }
+            static std::suspend_always final_suspend() noexcept { return {}; }
+
+            void return_void() noexcept
+            {
+                Coro * const coro = static_cast<Coro *>(m_Coro);
+                coro->m_HasReturnValue = true;
+                coro->ScheduleBackward();
+            }
+
+            void * operator new(std::size_t size) noexcept { return AllocateCoroutine(size, {}); }
+            void * operator new(std::size_t size, std::align_val_t alignment) noexcept { return AllocateCoroutine(size, alignment); }
+            void operator delete (void * ptr, std::size_t size) noexcept { FreeCoroutine(ptr, size); }
+        };
+
+        Coro()
+        {
+            FatalPrint("Failed to allocate coroutine");
         }
+
+        explicit Coro(promise_type * promise) noexcept
+        {
+            promise->m_Coro = this;
+
+            m_Promise = promise;
+            m_ResultPtr = nullptr;
+            m_PromiseCoroPtr = &promise->m_Coro;
+            m_CoroutineHandle = std::coroutine_handle<promise_type>::from_promise(*promise);
+            m_CoroutineType = ThreadType;
+        }
+
+        Coro(const Coro & rhs) = delete;
+        Coro(Coro && rhs) = default;
+
+        Coro & operator=(const Coro & rhs) = delete;
+        Coro & operator=(Coro && rhs) = default;
+
+        static bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> coro) noexcept
+        {
+            m_ReturnHandle = coro;
+            m_ReturnType = GetCurrentThreadContext();
+            ScheduleForward();
+        }
+
+        static void await_resume() noexcept {}
     };
 
     template <typename ReturnType>
     class CoroBundle final
     {
     public:
+
+        CoroBundle() = default;
+        CoroBundle(const CoroBundle &) = delete;
+        CoroBundle(CoroBundle &&) = delete;
+        CoroBundle & operator=(const CoroBundle &) = delete;
+        CoroBundle & operator=(CoroBundle &&) = delete;
 
         void Reserve(std::size_t count)
         {
@@ -263,11 +341,13 @@ namespace YT
          * @pre The job at the specified index must have completed
          */
         std::add_lvalue_reference_t<ReturnType> operator[](std::size_t index)
+            requires (!std::same_as<ReturnType, void>)
         {
             return *static_cast<ReturnType *>(m_OwnedJobs[index].GetResultPtr());
         }
 
         std::add_lvalue_reference_t<const ReturnType> operator[](std::size_t index) const
+            requires (!std::same_as<ReturnType, void>)
         {
             return *static_cast<const ReturnType *>(m_OwnedJobs[index].GetResultPtr());
         }

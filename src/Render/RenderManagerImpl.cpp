@@ -101,6 +101,7 @@ namespace YT
         try
         {
             g_RenderManager = std::make_unique<RenderManager>(init_info);
+            g_RenderManager->CreateInternalTextures();
             g_RenderManager->FinalizeDeferredImageLoad();
             return true;
         }
@@ -1035,6 +1036,21 @@ namespace YT
         return MakePair(ptr, data_handle);
     }
 
+    void RenderManager::CreateInternalTextures() noexcept
+    {
+        if (!m_WhiteImage)
+        {
+            std::array<unsigned char, 4> white_texture_data = { 255, 255, 255, 255 };
+            m_WhiteImage = CreateImageFromPixels(CreateByteSpan(white_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+        }
+
+        if (!m_BlackImage)
+        {
+            std::array<unsigned char, 4> black_texture_data = { 0, 0, 0, 255 };
+            m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
+        }
+    }
+
     MaybeInvalid<ImageReference> RenderManager::CreateImage(const Span<const std::byte>& image_file_data) noexcept
     {
         int tex_width, tex_height, tex_channels;
@@ -1119,18 +1135,7 @@ namespace YT
 
     void RenderManager::FinalizeDeferredImageLoad() noexcept
     {
-        if (!m_WhiteImage)
-        {
-            std::array<unsigned char, 4> white_texture_data = { 255, 255, 255, 255 };
-            m_WhiteImage = CreateImageFromPixels(CreateByteSpan(white_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
-        }
-
-        if (!m_BlackImage)
-        {
-            std::array<unsigned char, 4> black_texture_data = { 0, 0, 0, 255 };
-            m_BlackImage = CreateImageFromPixels(CreateByteSpan(black_texture_data), 1, 1, ImageFormat::R8G8B8A8Unorm);
-        }
-
+        m_ImageGenerationReadyEvent.Trigger();
         DeferredImageLoad::Finalize();
     }
 

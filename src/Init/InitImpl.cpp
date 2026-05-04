@@ -15,6 +15,7 @@ import :QuadRender;
 import :BackgroundTaskManager;
 import :FileMapper;
 import :FontManager;
+import :DeferredImageLoad;
 
 namespace YT
 {
@@ -43,6 +44,8 @@ namespace YT
             FatalPrint("Failed to create BackgroundTaskManager");
             return false;
         }
+
+        DeferredImageLoad::Start();
 
         if (!FontManager::CreateFontManager())
         {

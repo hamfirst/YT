@@ -25,11 +25,11 @@ namespace YT
         , m_Height(height)
         , m_ImageIndex(image_index)
     {
-
     }
 
     ImageReference::ImageReference(ImageReference && rhs) noexcept
     {
+
         m_Handle = rhs.m_Handle;
         m_Width = rhs.m_Width;
         m_Height = rhs.m_Height;
@@ -57,6 +57,7 @@ namespace YT
 
     ImageReference::~ImageReference() noexcept
     {
+
         if (g_RenderManager && m_ImageIndex != std::numeric_limits<std::uint32_t>::max())
         {
             g_RenderManager->DestroyImage(m_Handle);

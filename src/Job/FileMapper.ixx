@@ -7,6 +7,7 @@ module;
 #include <semaphore>
 #include <functional>
 #include <coroutine>
+#include <new>
 
 export module YT:FileMapper;
 
