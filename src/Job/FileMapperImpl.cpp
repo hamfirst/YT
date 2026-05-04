@@ -84,7 +84,7 @@ namespace YT
         return *this;
     }
 
-    MappedFile::~MappedFile()
+    MappedFile::~MappedFile() noexcept
     {
         if (m_Data != nullptr)
         {

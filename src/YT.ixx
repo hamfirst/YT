@@ -9,6 +9,7 @@ module;
 export module YT;
 
 export import :Types;
+export import :OwnedBuffer;
 export import :JobTypes;
 export import :BlockTable;
 export import :FixedBlockAllocator;
@@ -29,6 +30,11 @@ export import :ImageLoad;
 export import :DeferredImageLoad;
 export import :WindowTypes;
 export import :FileMapper;
+export import :FontTypes;
+export import :FontReference;
+export import :FontManager;
+export import :FontLoad;
+export import :DeferredFontLoad;
 
 namespace YT
 {

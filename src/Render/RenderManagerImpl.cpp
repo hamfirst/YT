@@ -41,6 +41,7 @@ import :WindowManager;
 import :RenderManager;
 import :RenderReflect;
 import :DeferredImageLoad;
+import :FontManager;
 import :FileMapper;
 import :Drawer;
 import :BackgroundTaskManager;
@@ -1137,6 +1138,10 @@ namespace YT
     {
         m_ImageGenerationReadyEvent.Trigger();
         DeferredImageLoad::Finalize();
+        if (g_FontManager)
+        {
+            g_FontManager->FinalizeDeferredFontLoads();
+        }
     }
 
     void RenderManager::DestroyImage(ImageHandle handle) noexcept

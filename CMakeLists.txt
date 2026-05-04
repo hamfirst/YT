@@ -60,6 +60,8 @@ set(YT_MODULE_SOURCES
         src/Allocators/ObjectPool.ixx
         src/Allocators/ShelfAllocator2D.ixx
 
+        src/Buffer/OwnedBuffer.ixx
+
         src/Delegate/Delegate.ixx
 
         src/Init/Init.ixx
@@ -106,8 +108,15 @@ set(YT_MODULE_SOURCES
         src/Render/StagingBuffer.ixx
         src/Render/TransientBuffer.ixx
 
+        src/Font/FontTypes.ixx
+        src/Font/FontReference.ixx
+        src/Font/FontReferenceImpl.cpp
         src/Font/FontManager.ixx
-        src/Font/FontManager.cpp
+        src/Font/FontManagerImpl.cpp
+        src/Font/FontLoad.ixx
+        src/Font/FontLoad.cpp
+        src/Font/DeferredFontLoad.ixx
+        src/Font/DeferredFontLoadImpl.cpp
 
         src/Widget/Widget.ixx
         src/Widget/WidgetRegistry.ixx

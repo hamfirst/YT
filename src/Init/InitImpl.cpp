@@ -15,6 +15,7 @@ import :QuadRender;
 import :BackgroundTaskManager;
 import :FileMapper;
 import :FontManager;
+import :DeferredFontLoad;
 import :DeferredImageLoad;
 
 namespace YT
@@ -52,6 +53,8 @@ namespace YT
             FatalPrint("Failed to create FontManager");
             return false;
         }
+
+        DeferredFontLoad::Start();
 
         if (!WindowManager::CreateWindowManager(init_info))
         {

@@ -32,7 +32,7 @@ namespace YT
         MappedFile & operator=(const MappedFile&) = delete;
         MappedFile & operator=(MappedFile && rhs) noexcept;
 
-        ~MappedFile();
+        ~MappedFile() noexcept;
 
         [[nodiscard]] Span<const std::byte> GetData() const noexcept;
 

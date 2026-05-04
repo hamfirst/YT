@@ -366,5 +366,8 @@ namespace YT
 
     export template <typename ReturnType = void>
     using MainThreadTask = Coro<ReturnType, ThreadContextType::Main>;
+
+    export template <typename ReturnType = void>
+    using FreeTypeTask = Coro<ReturnType, ThreadContextType::FreeType>;
 }
 
