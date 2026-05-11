@@ -39,6 +39,7 @@ import :RenderTypes;
 import :WindowResource;
 import :WindowManager;
 import :RenderManager;
+import :TransferManager;
 import :RenderReflect;
 import :DeferredImageLoad;
 import :FontManager;
@@ -126,6 +127,7 @@ namespace YT
             CreateLogicalDevice();
             CreateQueue();
             CreateCommandPool();
+            CreateTransferManager();
             CreateFrameSemaphore();
 
             CreateImageDescriptorPool();
@@ -154,6 +156,8 @@ namespace YT
     {
         m_WhiteImage = {};
         m_BlackImage = {};
+
+        m_TransferManager.reset();
 
         m_Device->waitIdle();
 
@@ -350,16 +354,90 @@ namespace YT
 
         m_PhysicalDevice = best_physical_device.value();
         m_BestQueueIndex = best_queue_index.value();
+
+        const Vector<vk::QueueFamilyProperties> queue_family_properties = m_PhysicalDevice.getQueueFamilyProperties();
+        const std::uint32_t graphics_family = static_cast<std::uint32_t>(m_BestQueueIndex);
+
+        m_DeviceGraphicsFamilyQueueCount = 1;
+        m_UploadQueueFamilyIndex = graphics_family;
+        m_UploadQueueIndexInFamily = 0;
+
+        bool found_async_transfer_family = false;
+        for (std::uint32_t i = 0; i < queue_family_properties.size(); ++i)
+        {
+            if (i == graphics_family)
+            {
+                continue;
+            }
+
+            const vk::QueueFamilyProperties & props = queue_family_properties[i];
+            if (!(props.queueFlags & vk::QueueFlagBits::eTransfer))
+            {
+                continue;
+            }
+
+            // Prefer a non-graphics queue for async DMA when available
+            if (props.queueFlags & vk::QueueFlagBits::eGraphics)
+            {
+                continue;
+            }
+
+            m_UploadQueueFamilyIndex = i;
+            m_UploadQueueIndexInFamily = 0;
+            found_async_transfer_family = true;
+            break;
+        }
+
+        if (!found_async_transfer_family)
+        {
+            const std::uint32_t queue_count = queue_family_properties[graphics_family].queueCount;
+            if (queue_count >= 2)
+            {
+                m_DeviceGraphicsFamilyQueueCount = 2;
+                m_UploadQueueFamilyIndex = graphics_family;
+                m_UploadQueueIndexInFamily = 1;
+            }
+            else
+            {
+                m_DeviceGraphicsFamilyQueueCount = 1;
+                m_UploadQueueFamilyIndex = graphics_family;
+                m_UploadQueueIndexInFamily = 0;
+            }
+        }
+
+        VerbosePrint(LogType::RenderManager, "Upload queue: family {} queueIndex {} (graphics family {} count {})",
+            m_UploadQueueFamilyIndex, m_UploadQueueIndexInFamily, graphics_family, m_DeviceGraphicsFamilyQueueCount);
     }
 
     void RenderManager::CreateLogicalDevice()
     {
-        // create a Device
-        float graphics_queue_priority = 0.0f;
-        vk::DeviceQueueCreateInfo device_queue_create_info(
-            vk::DeviceQueueCreateFlags(),
-            m_BestQueueIndex, 1,
-            &graphics_queue_priority);
+        const float priority_primary = 1.0f;
+        const float priority_secondary = 0.5f;
+
+        Vector<vk::DeviceQueueCreateInfo> queue_create_infos;
+        const std::uint32_t graphics_family_u32 = static_cast<std::uint32_t>(m_BestQueueIndex);
+
+        const bool dedicated_upload_family =
+            (m_UploadQueueFamilyIndex != graphics_family_u32);
+
+        if (dedicated_upload_family)
+        {
+            queue_create_infos.push_back(vk::DeviceQueueCreateInfo(
+                vk::DeviceQueueCreateFlags(), graphics_family_u32, 1, &priority_primary));
+            queue_create_infos.push_back(vk::DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags(),
+                m_UploadQueueFamilyIndex, 1, &priority_secondary));
+        }
+        else if (m_DeviceGraphicsFamilyQueueCount >= 2)
+        {
+            const float priorities[] = { priority_primary, priority_secondary };
+            queue_create_infos.push_back(vk::DeviceQueueCreateInfo(
+                vk::DeviceQueueCreateFlags(), graphics_family_u32, m_DeviceGraphicsFamilyQueueCount, priorities));
+        }
+        else
+        {
+            queue_create_infos.push_back(vk::DeviceQueueCreateInfo(
+                vk::DeviceQueueCreateFlags(), graphics_family_u32, 1, &priority_primary));
+        }
 
         vk::PhysicalDeviceFeatures2 device_features;
         device_features.features.shaderInt64 = true;
@@ -388,7 +466,7 @@ namespace YT
         device_features13.pNext = &swap_features;
 
         vk::DeviceCreateInfo device_create_info;
-        device_create_info.setQueueCreateInfos(device_queue_create_info);
+        device_create_info.setQueueCreateInfos(queue_create_infos);
         device_create_info.setPEnabledExtensionNames(m_RequiredExtensions);
         device_create_info.pNext = &device_features;
 
@@ -397,8 +475,19 @@ namespace YT
 
     void RenderManager::CreateQueue()
     {
-        // get the queues
-        m_Device->getQueue(m_BestQueueIndex, 0, &m_Queue);
+        m_Device->getQueue(static_cast<std::uint32_t>(m_BestQueueIndex), 0, &m_Queue);
+        m_Device->getQueue(m_UploadQueueFamilyIndex, m_UploadQueueIndexInFamily, &m_UploadQueue);
+    }
+
+    void RenderManager::CreateTransferManager()
+    {
+        const bool enable_transfer_worker_thread =
+            (m_UploadQueueFamilyIndex != static_cast<std::uint32_t>(m_BestQueueIndex))
+            || (m_DeviceGraphicsFamilyQueueCount >= 2);
+
+        m_TransferManager =
+            MakeUnique<TransferManager>(m_Device.get(), m_UploadQueue, m_UploadQueueFamilyIndex,
+                enable_transfer_worker_thread);
     }
 
     void RenderManager::CreateCommandPool()
@@ -1823,29 +1912,25 @@ namespace YT
         assert(m_ImageTransferInfos.size() == m_ImagePreTransferMemoryBarriers.size());
         assert(m_ImageTransferInfos.size() == m_ImagePostTransferMemoryBarriers.size());
 
+        assert(m_TransferManager);
+
         try
         {
-            // Get a command buffer
-            vk::CommandBufferAllocateInfo allocate_info;
-            allocate_info.commandPool = m_CommandPool.get();
-            allocate_info.level = vk::CommandBufferLevel::ePrimary;
-            allocate_info.commandBufferCount = 1;
-
-            auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
-            m_ImageUploadCommandBuffer = std::move(buffer_list.front());
+            vk::UniqueCommandBuffer upload_command_buffer =
+                m_TransferManager->AllocatePrimaryUploadCommandBuffer();
 
             vk::CommandBufferBeginInfo begin_info;
-            m_ImageUploadCommandBuffer->begin(begin_info);
+            upload_command_buffer->begin(begin_info);
 
             // Pre transfer pipeline barriers
             vk::DependencyInfo dep_info;
             dep_info.setImageMemoryBarriers(m_ImagePreTransferMemoryBarriers);
-            m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
+            upload_command_buffer->pipelineBarrier2(dep_info);
 
             // Transfer
             for (std::size_t index = 0; index < m_ImageTransferInfos.size(); index++)
             {
-                m_ImageTransferStagingBuffers[index]->Transfer(m_ImageUploadCommandBuffer.get(),
+                m_ImageTransferStagingBuffers[index]->Transfer(upload_command_buffer.get(),
                     m_ImageTransferInfos[index].m_Image,
                     m_ImageTransferInfos[index].m_Width, m_ImageTransferInfos[index].m_Height);
 
@@ -1854,20 +1939,13 @@ namespace YT
 
             // Post transfer pipeline barriers
             dep_info.setImageMemoryBarriers(m_ImagePostTransferMemoryBarriers);
-            m_ImageUploadCommandBuffer->pipelineBarrier2(dep_info);
+            upload_command_buffer->pipelineBarrier2(dep_info);
 
-            m_ImageUploadCommandBuffer->end();
+            upload_command_buffer->end();
 
-            vk::CommandBufferSubmitInfo command_buffer_submit_info;
-            command_buffer_submit_info.setCommandBuffer(m_ImageUploadCommandBuffer.get());
-
-            std::array command_buffer_submit_infos{ command_buffer_submit_info };
-
-            vk::SubmitInfo2 submit_info;
-            submit_info.setCommandBufferInfos(command_buffer_submit_infos);
-
-            vk::Result result = m_Queue.submit2(1, &submit_info, vk::Fence());
-            PushDeferredDeleteObject(std::move(m_ImageUploadCommandBuffer));
+            vk::Result const result =
+                m_TransferManager->SubmitToUploadQueue(upload_command_buffer.get(), vk::Fence{});
+            PushDeferredDeleteObject(std::move(upload_command_buffer));
 
             Vector<vk::DescriptorImageInfo> image_infos;
             image_infos.reserve(m_ImageTransferInfos.size());

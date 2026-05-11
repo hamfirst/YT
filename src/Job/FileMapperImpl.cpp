@@ -8,10 +8,11 @@ module;
 #include <functional>
 #include <new>
 
-
+#include <unistd.h>
 #include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/mman.h>
 
 module YT:FileMapperImpl;
 

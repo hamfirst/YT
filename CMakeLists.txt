@@ -107,6 +107,8 @@ set(YT_MODULE_SOURCES
         src/Render/ShaderBuilder.ixx
         src/Render/StagingBuffer.ixx
         src/Render/TransientBuffer.ixx
+        src/Render/TransferManager.ixx
+        src/Render/TransferManagerImpl.cpp
 
         src/Font/FontTypes.ixx
         src/Font/FontReference.ixx

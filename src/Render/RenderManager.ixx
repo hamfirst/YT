@@ -35,6 +35,7 @@ import :ObjectPool;
 import :DeferredDelete;
 import :Delegate;
 import :CoroEvent;
+import :TransferManager;
 
 
 namespace YT
@@ -62,6 +63,7 @@ namespace YT
         void CreateLogicalDevice();
         void CreateQueue();
         void CreateCommandPool();
+        void CreateTransferManager();
         void CreateFrameSemaphore();
 
         void CreateImageDescriptorPool();
@@ -176,6 +178,13 @@ namespace YT
 
         int m_BestDeviceIndex = -1;
         int m_BestQueueIndex = -1;
+
+        std::uint32_t m_UploadQueueFamilyIndex = 0;
+        std::uint32_t m_UploadQueueIndexInFamily = 0;
+        /** 1 if only graphics queue requested; 2 if a second graphics-queue command stream is requested for uploads. */
+        std::uint32_t m_DeviceGraphicsFamilyQueueCount = 1;
+
+        vk::Queue m_UploadQueue;
         Vector<const char *> m_RequiredExtensions;
 
         vk::PhysicalDevice m_PhysicalDevice;
@@ -229,7 +238,6 @@ namespace YT
             uint32_t m_Height = 0;
         };
 
-        vk::UniqueCommandBuffer m_ImageUploadCommandBuffer;
         Vector<vk::ImageMemoryBarrier2> m_ImagePreTransferMemoryBarriers;
         Vector<ImageTransferInfo> m_ImageTransferInfos;
         Vector<UniquePtr<StagingBuffer>> m_ImageTransferStagingBuffers;
@@ -253,6 +261,8 @@ namespace YT
 
         vk::UniqueSemaphore m_FrameSemaphore;
         std::uint64_t m_FrameSemaphoreValue = 0;
+
+        UniquePtr<TransferManager> m_TransferManager;
     };
 
 

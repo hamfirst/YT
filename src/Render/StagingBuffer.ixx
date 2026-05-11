@@ -47,6 +47,7 @@ namespace YT
             auto buffer_data = Lock();
 
             memcpy(buffer_data.data(), data.data(), data.size());
+            m_Size = data.size();
 
             Unlock();
         }
@@ -67,10 +68,20 @@ namespace YT
             return m_AllocationSize;
         }
 
-        void Transfer(vk::CommandBuffer & command_buffer, vk::Buffer & target_buffer, std::size_t offset) noexcept
+        [[nodiscard]] std::size_t GetBufferSize() const noexcept
+        {
+            return m_Size;
+        }
+
+        [[nodiscard]] bool IsLocked() const noexcept
+        {
+            return m_IsLocked;
+        }
+
+        void Transfer(vk::CommandBuffer & command_buffer, vk::Buffer & target_buffer, std::size_t offset, std::size_t size) noexcept
         {
             vk::BufferCopy copy_region;
-            copy_region.size = m_AllocationSize;
+            copy_region.size = size;
             copy_region.srcOffset = 0;
             copy_region.dstOffset = offset;
 
@@ -122,11 +133,29 @@ namespace YT
             return region;
         }
 
+        bool Write(const Span<const std::byte> & data)
+        {
+            if (m_Size + data.size() > m_AllocationSize)
+            {
+                return false;
+            }
+
+            if (!m_IsLocked)
+            {
+                Lock();
+            }
+
+            memcpy(&m_LockedPtr[m_Size], data.data(), data.size());
+            m_Size += data.size();
+            return true;
+        }
+
         Span<std::byte> Lock()
         {
             assert(!m_IsLocked);
 
             auto * ptr = static_cast<std::byte *>(m_Allocator->mapMemory(m_Allocation.get()));
+            m_LockedPtr = ptr;
 
             if (!ptr)
             {
@@ -134,7 +163,7 @@ namespace YT
             }
 
             m_IsLocked = true;
-            return Span{ ptr, m_AllocationSize };
+            return { ptr, m_AllocationSize };
         }
 
         void Unlock()
@@ -142,6 +171,7 @@ namespace YT
             assert(m_IsLocked);
             m_Allocator->unmapMemory(m_Allocation.get());
             m_IsLocked = false;
+            m_LockedPtr = nullptr;
         }
 
     private:
@@ -151,6 +181,8 @@ namespace YT
         vma::UniqueBuffer m_Buffer;
         vma::UniqueAllocation m_Allocation;
         std::size_t m_AllocationSize =  0;
+        std::size_t m_Size = 0;
         bool m_IsLocked = false;
+        std::byte * m_LockedPtr = nullptr;
     };
 }
