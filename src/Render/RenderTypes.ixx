@@ -27,6 +27,32 @@ namespace YT
         R8Unorm,
     };
 
+    export enum class ImageOwner
+    {
+        Unknown,
+        Graphics,
+        Transfer,
+    };
+
+    export enum class ImageLayout
+    {
+        Unknown,
+        TransferDst,
+        ShaderOptimized,
+    };
+
+    export enum class ImageUsage
+    {
+        None,
+        Fragment,
+        Vertex,
+        FragmentVertex,
+        Compute,
+        ComputeFragment,
+        ComputeVertex,
+        ComputeFragmentVertex,
+    };
+
     export int GetBytesPerPixel(ImageFormat format)
     {
         switch (format)

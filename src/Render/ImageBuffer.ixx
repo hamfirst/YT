@@ -193,6 +193,16 @@ namespace YT
             return m_Format;
         }
 
+        [[nodiscard]] ImageOwner GetOwner() const noexcept
+        {
+            return m_Owner;
+        }
+
+        [[nodiscard]] ImageLayout GetLayout() const noexcept
+        {
+            return m_Layout;
+        }
+
     private:
 
         void CreateSampler()
@@ -220,5 +230,8 @@ namespace YT
         std::uint32_t m_Width = 0;
         std::uint32_t m_Height = 0;
         ImageFormat m_Format = ImageFormat::R8G8B8A8Unorm;
+        ImageOwner m_Owner = ImageOwner::Unknown;
+        ImageLayout m_Layout = ImageLayout::Unknown;
+        ImageUsage m_Usage = ImageUsage::Fragment;
     };
 }
