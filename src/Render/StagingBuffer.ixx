@@ -133,7 +133,7 @@ namespace YT
             return region;
         }
 
-        bool Write(const Span<const std::byte> & data)
+        bool Write(const Span<const std::byte> & data) noexcept
         {
             if (m_Size + data.size() > m_AllocationSize)
             {
@@ -148,6 +148,23 @@ namespace YT
             memcpy(&m_LockedPtr[m_Size], data.data(), data.size());
             m_Size += data.size();
             return true;
+        }
+
+        Span<const std::byte> Reserve(std::size_t size) noexcept
+        {
+            if (m_Size + size > m_AllocationSize)
+            {
+                return {};
+            }
+
+            if (!m_IsLocked)
+            {
+                Lock();
+            }
+
+            Span<const std::byte> data { m_LockedPtr + m_Size, size };
+            m_Size += size;
+            return data;
         }
 
         Span<std::byte> Lock()

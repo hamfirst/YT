@@ -49,6 +49,16 @@ namespace YT
         }
     }
 
+    void TransferManager::TransferEntireImage(ImageBuffer & target_image, const Span<const std::byte> & src_data)
+    {
+
+    }
+
+    void TransferManager::TransferPartialImage(ImageBuffer &target_image, std::uint32_t x, std::uint32_t y,
+        std::uint32_t width, std::uint32_t height, const Span<const std::byte> &src_data)
+    {
+    }
+
     void TransferManager::Run(std::stop_token stop_token) noexcept
     {
         if (!m_WorkerSync)

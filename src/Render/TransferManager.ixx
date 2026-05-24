@@ -9,16 +9,11 @@ module;
 
 export module YT:TransferManager;
 
+import :ImageBuffer;
 import :MultiProducerSingleConsumer;
 
 namespace YT
 {
-    /**
-     * Owns upload-queue resources for buffer-to-image (and related) transfers: a CommandPool scoped to the
-     * upload queue family. When \p enable_worker_thread is true, starts a worker thread scaffold for future
-     * async submissions; when false (single-queue fallback), uploads are recorded and submitted from the caller.
-     * Constructed after vk::Device and upload vk::Queue are valid.
-     */
     export class TransferManager final
     {
     public:
@@ -30,6 +25,11 @@ namespace YT
         TransferManager & operator=(TransferManager &&) = delete;
 
         ~TransferManager() noexcept;
+
+        void TransferEntireImage(ImageBuffer & target_image, const Span<const std::byte> & src_data);
+        void TransferPartialImage(ImageBuffer & target_image, std::uint32_t x, std::uint32_t y,
+            std::uint32_t width, std::uint32_t height, const Span<const std::byte> & src_data);
+
 
     private:
         [[nodiscard]] vk::UniqueCommandBuffer AllocatePrimaryUploadCommandBuffer();
