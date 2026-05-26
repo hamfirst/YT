@@ -5,6 +5,7 @@ module;
 #include <memory>
 #include <span>
 #include <array>
+#include <variant>
 #include <vector>
 #include <unordered_map>
 #include <functional>
@@ -159,24 +160,16 @@ namespace YT
 
         m_TransferManager.reset();
 
-        m_Device->waitIdle();
+        CleanupImmediately();
 
         m_PSOTable.Clear();
 
         for (auto & frame_resource : m_FrameResources)
         {
-            frame_resource.m_DeferredDeletionObjects.clear();
             frame_resource.m_CommandBuffer.reset();
-
-            for (const auto & func : frame_resource.m_DeletionCallbacks)
-            {
-                func();
-            }
-
         }
 
         m_FrameSemaphore.reset();
-
         m_Device->waitIdle();
     }
 
@@ -353,14 +346,14 @@ namespace YT
             best_physical_device->getProperties().deviceName.data(), best_queue_index.value());
 
         m_PhysicalDevice = best_physical_device.value();
-        m_BestQueueIndex = best_queue_index.value();
+        GGraphicsQueueIndex = best_queue_index.value();
 
         const Vector<vk::QueueFamilyProperties> queue_family_properties = m_PhysicalDevice.getQueueFamilyProperties();
-        const std::uint32_t graphics_family = static_cast<std::uint32_t>(m_BestQueueIndex);
+        const std::uint32_t graphics_family = static_cast<std::uint32_t>(GGraphicsQueueIndex);
 
         m_DeviceGraphicsFamilyQueueCount = 1;
-        m_UploadQueueFamilyIndex = graphics_family;
-        m_UploadQueueIndexInFamily = 0;
+        GTransferQueueIndex = GGraphicsQueueIndex;
+        m_TransferQueueIndexInFamily = 0;
 
         bool found_async_transfer_family = false;
         for (std::uint32_t i = 0; i < queue_family_properties.size(); ++i)
@@ -382,8 +375,8 @@ namespace YT
                 continue;
             }
 
-            m_UploadQueueFamilyIndex = i;
-            m_UploadQueueIndexInFamily = 0;
+            GTransferQueueIndex = i;
+            m_TransferQueueIndexInFamily = 0;
             found_async_transfer_family = true;
             break;
         }
@@ -391,22 +384,21 @@ namespace YT
         if (!found_async_transfer_family)
         {
             const std::uint32_t queue_count = queue_family_properties[graphics_family].queueCount;
+            GTransferQueueIndex = graphics_family;
             if (queue_count >= 2)
             {
                 m_DeviceGraphicsFamilyQueueCount = 2;
-                m_UploadQueueFamilyIndex = graphics_family;
-                m_UploadQueueIndexInFamily = 1;
+                m_TransferQueueIndexInFamily = 1;
             }
             else
             {
                 m_DeviceGraphicsFamilyQueueCount = 1;
-                m_UploadQueueFamilyIndex = graphics_family;
-                m_UploadQueueIndexInFamily = 0;
+                m_TransferQueueIndexInFamily = 0;
             }
         }
 
         VerbosePrint(LogType::RenderManager, "Upload queue: family {} queueIndex {} (graphics family {} count {})",
-            m_UploadQueueFamilyIndex, m_UploadQueueIndexInFamily, graphics_family, m_DeviceGraphicsFamilyQueueCount);
+            GTransferQueueIndex, m_TransferQueueIndexInFamily, graphics_family, m_DeviceGraphicsFamilyQueueCount);
     }
 
     void RenderManager::CreateLogicalDevice()
@@ -415,28 +407,25 @@ namespace YT
         const float priority_secondary = 0.5f;
 
         Vector<vk::DeviceQueueCreateInfo> queue_create_infos;
-        const std::uint32_t graphics_family_u32 = static_cast<std::uint32_t>(m_BestQueueIndex);
-
-        const bool dedicated_upload_family =
-            (m_UploadQueueFamilyIndex != graphics_family_u32);
+        const bool dedicated_upload_family = GTransferQueueIndex != GGraphicsQueueIndex;
 
         if (dedicated_upload_family)
         {
             queue_create_infos.push_back(vk::DeviceQueueCreateInfo(
-                vk::DeviceQueueCreateFlags(), graphics_family_u32, 1, &priority_primary));
+                vk::DeviceQueueCreateFlags(), GGraphicsQueueIndex, 1, &priority_primary));
             queue_create_infos.push_back(vk::DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags(),
-                m_UploadQueueFamilyIndex, 1, &priority_secondary));
+                GTransferQueueIndex, 1, &priority_secondary));
         }
         else if (m_DeviceGraphicsFamilyQueueCount >= 2)
         {
             const float priorities[] = { priority_primary, priority_secondary };
             queue_create_infos.push_back(vk::DeviceQueueCreateInfo(
-                vk::DeviceQueueCreateFlags(), graphics_family_u32, m_DeviceGraphicsFamilyQueueCount, priorities));
+                vk::DeviceQueueCreateFlags(), GGraphicsQueueIndex, m_DeviceGraphicsFamilyQueueCount, priorities));
         }
         else
         {
             queue_create_infos.push_back(vk::DeviceQueueCreateInfo(
-                vk::DeviceQueueCreateFlags(), graphics_family_u32, 1, &priority_primary));
+                vk::DeviceQueueCreateFlags(), GGraphicsQueueIndex, 1, &priority_primary));
         }
 
         vk::PhysicalDeviceFeatures2 device_features;
@@ -475,19 +464,17 @@ namespace YT
 
     void RenderManager::CreateQueue()
     {
-        m_Device->getQueue(static_cast<std::uint32_t>(m_BestQueueIndex), 0, &m_Queue);
-        m_Device->getQueue(m_UploadQueueFamilyIndex, m_UploadQueueIndexInFamily, &m_UploadQueue);
+        m_Device->getQueue(static_cast<std::uint32_t>(GGraphicsQueueIndex), 0, &m_Queue);
+        m_Device->getQueue(GTransferQueueIndex, m_TransferQueueIndexInFamily, &m_TransferQueue);
     }
 
     void RenderManager::CreateTransferManager()
     {
         const bool enable_transfer_worker_thread =
-            (m_UploadQueueFamilyIndex != static_cast<std::uint32_t>(m_BestQueueIndex))
-            || (m_DeviceGraphicsFamilyQueueCount >= 2);
+            GTransferQueueIndex != GGraphicsQueueIndex || (m_DeviceGraphicsFamilyQueueCount >= 2);
 
         m_TransferManager =
-            MakeUnique<TransferManager>(m_Device.get(), m_UploadQueue, m_UploadQueueFamilyIndex,
-                enable_transfer_worker_thread);
+            MakeUnique<TransferManager>(m_Device.get(), m_TransferQueue, enable_transfer_worker_thread);
     }
 
     void RenderManager::CreateCommandPool()
@@ -495,7 +482,7 @@ namespace YT
         // create the command pool
         vk::CommandPoolCreateInfo command_pool_create_info;
         command_pool_create_info.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-        command_pool_create_info.queueFamilyIndex = m_BestQueueIndex;
+        command_pool_create_info.queueFamilyIndex = GGraphicsQueueIndex;
         m_CommandPool = m_Device->createCommandPoolUnique(command_pool_create_info);
     }
 
@@ -509,7 +496,7 @@ namespace YT
         semaphore_create_info.pNext = &semaphore_type_create_info;
 
         m_FrameSemaphore = m_Device->createSemaphoreUnique(semaphore_create_info);
-        m_FrameSemaphoreValue = 1;
+        GPendingFrameTimelineValue = 1;
     }
 
     void RenderManager::CreateImageDescriptorPool()
@@ -656,12 +643,12 @@ namespace YT
     {
         for (auto & semaphore : resource.m_ImageAvailableSemaphores)
         {
-            PushDeferredDeleteObject(std::move(semaphore));
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(semaphore));
         }
 
         for (auto & semaphore : resource.m_RenderFinishedSemaphores)
         {
-            PushDeferredDeleteObject(std::move(semaphore));
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(semaphore));
         }
 
         resource.m_ImageAvailableSemaphores.clear();
@@ -847,7 +834,7 @@ namespace YT
         vk::SemaphoreSubmitInfo & timeline_submit_info =
             render_finished_semaphore_signal_infos.emplace_back();
         timeline_submit_info.setSemaphore(m_FrameSemaphore.get());
-        timeline_submit_info.setValue(m_FrameSemaphoreValue);
+        timeline_submit_info.setValue(GPendingFrameTimelineValue);
         timeline_submit_info.setStageMask(vk::PipelineStageFlagBits2::eAllGraphics);
 
         vk::SubmitInfo2 submit_info;
@@ -882,14 +869,26 @@ namespace YT
                     }
                 }
             }
-
             // Do any queued deletes for last frame
-            for (const auto & func : frame_resource.m_DeletionCallbacks)
+            while (!m_DeferredDeleteInfos.empty())
             {
-                func();
-            }
+                const DeferredDeleteInfo & delete_info = m_DeferredDeleteInfos.front();
+                if (delete_info.m_TimelineValue <= current_frame_semaphore_value)
+                {
+                    if (std::holds_alternative<Function<void()>>(delete_info.m_Data))
+                    {
+                        auto & func = std::get<Function<void()>>(delete_info.m_Data);
+                        func();
+                    }
 
-            frame_resource.m_DeletionCallbacks.clear();
+                    m_DeferredDeleteInfos.pop();
+                }
+                else
+                {
+                    break;
+                }
+
+            }
         }
         catch (vk::SystemError& err)
         {
@@ -902,7 +901,7 @@ namespace YT
             return false;
         }
 
-        m_FrameSemaphoreValue++;
+        AllocateTimelineSemaphoreValue();
 
         m_FrameIndex++;
         if (m_FrameIndex >= FrameResourceCount)
@@ -916,55 +915,50 @@ namespace YT
 
     void RenderManager::ReleaseWindowResource(WindowResource & resource) noexcept
     {
-        CleanupImmediately();
-
         for (auto & semaphore : resource.m_ImageAvailableSemaphores)
         {
-            semaphore.reset();
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(semaphore));
         }
 
         for (auto & semaphore : resource.m_RenderFinishedSemaphores)
         {
-            semaphore.reset();
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(semaphore));
         }
 
         for (auto & image_view : resource.m_SwapChainImageViews)
         {
-            image_view.reset();
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(image_view));
         }
 
         for (auto & command_buffer : resource.m_CommandBuffers)
         {
-            command_buffer.reset();
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(command_buffer));
         }
 
-        resource.m_SwapChain.reset();
+        PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(resource.m_SwapChain));
 
-        g_WindowManager->SyncBeforeSurfaceDestroy();
-
-        resource.m_VkSurface.reset();
-
+        PushDeferredDeleteCallback(GPendingFrameTimelineValue, [this, surface = resource.m_VkSurface.release()]() mutable
+        {
+            g_WindowManager->SyncBeforeSurfaceDestroy();
+            m_Instance->destroySurfaceKHR(surface);
+        });
     }
 
     void RenderManager::CleanupImmediately()
     {
         m_Device->waitIdle();
 
-        for (auto & frame_resource : m_FrameResources)
+        while (!m_DeferredDeleteInfos.empty())
         {
-            frame_resource.m_DeferredDeletionObjects.clear();
-
-            for (const auto & func : frame_resource.m_DeletionCallbacks)
+            const DeferredDeleteInfo & delete_info = m_DeferredDeleteInfos.front();
+            if (std::holds_alternative<Function<void()>>(delete_info.m_Data))
             {
+                auto & func = std::get<Function<void()>>(delete_info.m_Data);
                 func();
             }
-
-            frame_resource.m_DeletionCallbacks.clear();
+            m_DeferredDeleteInfos.pop();
         }
-
-        m_Device->waitIdle();
     }
-
     void RenderManager::RegisterShader(const uint8_t* shader_data, std::size_t shader_data_size) noexcept
     {
         if (m_ShaderModules.contains(shader_data))
@@ -982,7 +976,7 @@ namespace YT
     {
         if (auto shader_module = m_ShaderModules.find(shader_data); shader_module != m_ShaderModules.end())
         {
-            PushDeferredDeleteCallback([this, shader_module_ptr = shader_module->second.release()]()
+            PushDeferredDeleteCallback(GPendingFrameTimelineValue, [this, shader_module_ptr = shader_module->second.release()]()
             {
                m_Device->destroyShaderModule(shader_module_ptr);
             });
@@ -1184,8 +1178,8 @@ namespace YT
                 width, height, format);
 
             ImageBuffer * image_buffer = m_ImageTable.ResolveHandle(handle);
-            m_ImagePreTransferMemoryBarriers.emplace_back(image_buffer->GetTransitionToTransferDestinationBarrier());
-            m_ImagePostTransferMemoryBarriers.emplace_back(image_buffer->GetTransitionToShaderReadableBarrier());
+            m_ImagePreTransferMemoryBarriers.emplace_back(image_buffer->TransitionToLayout(ImageLayout::TransferDest));
+            m_ImagePostTransferMemoryBarriers.emplace_back(image_buffer->TransitionToLayout(ImageLayout::ShaderRead));
 
             auto image_handle = MakeCustomBlockTableHandle<ImageHandle>(handle);
             std::uint32_t image_index = ImageTable::GetHandleIndex(image_handle);
@@ -1235,6 +1229,13 @@ namespace YT
 
     void RenderManager::DestroyImage(ImageHandle handle) noexcept
     {
+        if (ImageBuffer * image = m_ImageTable.ResolveHandle(handle))
+        {
+            image->VisitRenderResources([&](auto & resource)
+            {
+                PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(resource));
+            });
+        }
         m_ImageTable.ReleaseHandle(handle);
     }
 
@@ -1250,8 +1251,8 @@ namespace YT
         {
             VerbosePrint(LogType::RenderManager, "Creating swap chain {} {}...", resource.m_RequestedExtent.width, resource.m_RequestedExtent.height);
 
-            PushDeferredDeleteObjectList(resource.m_SwapChainImageViews);
-            PushDeferredDeleteObjectList(resource.m_SwapChainImages);
+            PushDeferredDeleteObjectList(GPendingFrameTimelineValue, resource.m_SwapChainImageViews);
+            PushDeferredDeleteObjectList(GPendingFrameTimelineValue, resource.m_SwapChainImages);
 
             vk::SurfaceCapabilitiesKHR surface_caps;
             if (vk::Result result = m_PhysicalDevice.getSurfaceCapabilitiesKHR(resource.m_VkSurface.get(), &surface_caps); result != vk::Result::eSuccess)
@@ -1305,7 +1306,7 @@ namespace YT
 
             if (resource.m_SwapChain)
             {
-                PushDeferredDeleteObject(std::move(resource.m_SwapChain));
+                PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(resource.m_SwapChain));
             }
 
             resource.m_SwapChain = m_Device->createSwapchainKHRUnique(swap_chain_create_info);
@@ -1392,7 +1393,7 @@ namespace YT
         {
             if (m_BufferDescriptorPool.get())
             {
-                PushDeferredDeleteCallback([this, buffer_pool = m_BufferDescriptorPool.release()]() mutable
+                PushDeferredDeleteCallback(GPendingFrameTimelineValue, [this, buffer_pool = m_BufferDescriptorPool.release()]() mutable
                 {
                     m_Device->destroyDescriptorPool(buffer_pool);
                 });
@@ -1400,7 +1401,7 @@ namespace YT
 
             if (m_BufferDescriptorSetLayout.get())
             {
-                PushDeferredDeleteCallback([this, buffer_set_layout = m_BufferDescriptorSetLayout.release()]() mutable
+                PushDeferredDeleteCallback(GPendingFrameTimelineValue, [this, buffer_set_layout = m_BufferDescriptorSetLayout.release()]() mutable
                 {
                     m_Device->destroyDescriptorSetLayout(buffer_set_layout);
                 });
@@ -1901,7 +1902,7 @@ namespace YT
                 m_ImagePreTransferMemoryBarriers.erase(m_ImagePreTransferMemoryBarriers.begin() + index);
                 m_ImagePostTransferMemoryBarriers.erase(m_ImagePostTransferMemoryBarriers.begin() + index);
 
-                PushDeferredDeleteObject(std::move(m_ImageTransferStagingBuffers[index]));
+                PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(m_ImageTransferStagingBuffers[index]));
                 m_ImageTransferStagingBuffers.erase(m_ImageTransferStagingBuffers.begin() + index);
 
                 --index;
@@ -1916,8 +1917,13 @@ namespace YT
 
         try
         {
-            vk::UniqueCommandBuffer upload_command_buffer =
-                m_TransferManager->AllocatePrimaryUploadCommandBuffer();
+            vk::CommandBufferAllocateInfo allocate_info;
+            allocate_info.commandPool = m_CommandPool.get();
+            allocate_info.level = vk::CommandBufferLevel::ePrimary;
+            allocate_info.commandBufferCount = 1;
+
+            auto buffer_list = m_Device->allocateCommandBuffersUnique(allocate_info);
+            vk::UniqueCommandBuffer upload_command_buffer = std::move(buffer_list.front());
 
             vk::CommandBufferBeginInfo begin_info;
             upload_command_buffer->begin(begin_info);
@@ -1934,7 +1940,7 @@ namespace YT
                     m_ImageTransferInfos[index].m_Image,
                     m_ImageTransferInfos[index].m_Width, m_ImageTransferInfos[index].m_Height);
 
-                PushDeferredDeleteObject(std::move(m_ImageTransferStagingBuffers[index]));
+                PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(m_ImageTransferStagingBuffers[index]));
             }
 
             // Post transfer pipeline barriers
@@ -1943,9 +1949,18 @@ namespace YT
 
             upload_command_buffer->end();
 
-            vk::Result const result =
-                m_TransferManager->SubmitToUploadQueue(upload_command_buffer.get(), vk::Fence{});
-            PushDeferredDeleteObject(std::move(upload_command_buffer));
+
+            vk::CommandBufferSubmitInfo command_buffer_submit_info;
+            command_buffer_submit_info.setCommandBuffer(upload_command_buffer.get());
+
+            std::array command_buffer_submit_infos{ command_buffer_submit_info };
+
+            vk::SubmitInfo2 submit_info;
+            submit_info.setCommandBufferInfos(command_buffer_submit_infos);
+
+            vk::Result result = m_Queue.submit2(1, &submit_info, vk::Fence{});
+
+            PushDeferredDeleteObject(GPendingFrameTimelineValue, std::move(upload_command_buffer));
 
             Vector<vk::DescriptorImageInfo> image_infos;
             image_infos.reserve(m_ImageTransferInfos.size());
@@ -1999,4 +2014,8 @@ namespace YT
         return false;
     }
 
+    std::uint64_t RenderManager::AllocateTimelineSemaphoreValue() noexcept
+    {
+        return ++GPendingFrameTimelineValue;
+    }
 } // namespace YT

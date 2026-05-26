@@ -95,6 +95,16 @@ namespace YT
             return m_T != nullptr;
         }
 
+        void Retire() noexcept
+        {
+            if (m_T)
+            {
+                m_T->~T();
+                m_T = nullptr;
+                m_ReturnPool = nullptr;
+            }
+        }
+
     private:
         T * m_T = nullptr;
         ObjectPool<T> * m_ReturnPool = nullptr;
@@ -142,6 +152,7 @@ namespace YT
 
             free_object->m_Next = nullptr;
             reinitializer(free_object->m_Data);
+            m_FreeListSize--;
             return PooledObject<T>(&free_object->m_Data, this);
         }
 
@@ -150,6 +161,11 @@ namespace YT
             requires std::constructible_from<T, std::invoke_result_t<Initializer>>
         {
             return GetFreeObject<Initializer>(std::forward<Initializer>(initializer), [](T &){});
+        }
+
+        [[nodiscard]] std::size_t GetFreeListSize() const noexcept
+        {
+            return m_FreeListSize;
         }
     private:
 
@@ -164,6 +180,7 @@ namespace YT
 
             free_object_pool_data->m_Next = m_FreeList;
             m_FreeList = free_object_pool_data;
+            m_FreeListSize++;
         }
 
     private:
@@ -175,6 +192,7 @@ namespace YT
 
         FixedBlockAllocator<ObjectPoolData> m_Allocator;
         ObjectPoolData * m_FreeList = nullptr;
+        std::size_t m_FreeListSize = 0;
 
     };
 }

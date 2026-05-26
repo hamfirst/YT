@@ -378,7 +378,7 @@ namespace YT
                 }
                 catch (...)
                 {
-                    
+
                 }
 
                 ReleaseSlot(block, handle.m_ElemIndex);

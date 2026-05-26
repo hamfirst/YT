@@ -57,7 +57,6 @@ namespace YT
 
     ImageReference::~ImageReference() noexcept
     {
-
         if (g_RenderManager && m_ImageIndex != std::numeric_limits<std::uint32_t>::max())
         {
             g_RenderManager->DestroyImage(m_Handle);

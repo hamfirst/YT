@@ -97,6 +97,7 @@ set(YT_MODULE_SOURCES
         src/Render/ImageBuffer.ixx
         src/Render/ImageReference.ixx
         src/Render/ImageReferenceImpl.cpp
+        src/Render/OpaqueBuffer.ixx
         src/Render/QuadRender.ixx
         src/Render/QuadRenderImpl.cpp
         src/Render/RenderManager.ixx

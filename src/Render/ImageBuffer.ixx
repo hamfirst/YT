@@ -2,6 +2,7 @@ module;
 
 #include <cstddef>
 #include <cstdint>
+#include <cassert>
 #include <utility>
 #include <stdexcept>
 #include <type_traits>
@@ -32,6 +33,76 @@ namespace YT
         case ImageFormat::R8Unorm:
             return vk::Format::eR8Unorm;
         }
+    }
+
+    ImageLayout GetDefaultImageLayoutForOwner(ImageOwner owner)
+    {
+        switch (owner)
+        {
+            default:
+            case ImageOwner::Unknown:
+                return ImageLayout::Unknown;
+            case ImageOwner::Graphics:
+                return ImageLayout::ShaderRead;
+            case ImageOwner::Transfer:
+                return ImageLayout::TransferDest;
+        }
+    }
+
+    vk::ImageLayout GetVkImageLayout(ImageLayout layout)
+    {
+        switch (layout)
+        {
+            default:
+            case ImageLayout::Unknown:
+                return vk::ImageLayout::eUndefined;
+            case ImageLayout::ShaderRead:
+                return vk::ImageLayout::eShaderReadOnlyOptimal;
+            case ImageLayout::TransferDest:
+                return vk::ImageLayout::eTransferDstOptimal;
+        }
+    }
+
+    std::uint32_t GetVkQueueFamily(ImageOwner owner)
+    {
+        switch (owner)
+        {
+            default:
+            case ImageOwner::Unknown:
+                return vk::QueueFamilyIgnored;
+            case ImageOwner::Graphics:
+                return GGraphicsQueueIndex;
+            case ImageOwner::Transfer:
+                return GTransferQueueIndex;
+        }
+    }
+
+    Pair<vk::PipelineStageFlags2, vk::AccessFlags2> GetSrcImageAccess(ImageLayout prev_layout, ImageLayout new_layout)
+    {
+        if (prev_layout == ImageLayout::ShaderRead && new_layout == ImageLayout::TransferDest)
+        {
+            return MakePair(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite);
+        }
+        if (prev_layout == ImageLayout::TransferDest && new_layout == ImageLayout::ShaderRead)
+        {
+            return MakePair(vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite);
+        }
+
+        return {};
+    }
+
+    Pair<vk::PipelineStageFlags2, vk::AccessFlags2> GetDstImageAccess(ImageLayout prev_layout, ImageLayout new_layout)
+    {
+        if (prev_layout == ImageLayout::ShaderRead && new_layout == ImageLayout::TransferDest)
+        {
+            return MakePair(vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite);
+        }
+        if (prev_layout == ImageLayout::TransferDest && new_layout == ImageLayout::ShaderRead)
+        {
+            return MakePair(vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead);
+        }
+
+        return {};
     }
 
     class ImageBuffer final
@@ -115,53 +186,54 @@ namespace YT
             CreateSampler();
         }
 
-        vk::ImageMemoryBarrier2 GetTransitionToTransferDestinationBarrier() const noexcept
-        {
-            vk::ImageMemoryBarrier2 pre_memory_barrier;
-            pre_memory_barrier.oldLayout = vk::ImageLayout::eUndefined;
-            pre_memory_barrier.newLayout = vk::ImageLayout::eTransferDstOptimal;
-            pre_memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
-            pre_memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
-            pre_memory_barrier.image = m_Image.get();
-            pre_memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-            pre_memory_barrier.subresourceRange.baseMipLevel = 0;
-            pre_memory_barrier.subresourceRange.levelCount = 1;
-            pre_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            pre_memory_barrier.subresourceRange.layerCount = 1;
-            pre_memory_barrier.srcAccessMask = {};
-            pre_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eTransferWrite;
-            pre_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe;
-            pre_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eTransfer;
-
-            return pre_memory_barrier;
-        }
-
-        vk::ImageMemoryBarrier2 GetTransitionToShaderReadableBarrier() const noexcept
-        {
-            vk::ImageMemoryBarrier2 post_memory_barrier;
-            post_memory_barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-            post_memory_barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-            post_memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
-            post_memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
-            post_memory_barrier.image = m_Image.get();
-            post_memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-            post_memory_barrier.subresourceRange.baseMipLevel = 0;
-            post_memory_barrier.subresourceRange.levelCount = 1;
-            post_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            post_memory_barrier.subresourceRange.layerCount = 1;
-            post_memory_barrier.srcAccessMask = vk::AccessFlagBits2::eTransferWrite;
-            post_memory_barrier.dstAccessMask = vk::AccessFlagBits2::eShaderRead;
-            post_memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eTransfer;
-            post_memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eFragmentShader;
-
-            return post_memory_barrier;
-        }
-
         ImageBuffer(const ImageBuffer&) = delete;
         ImageBuffer(ImageBuffer&&) = delete;
         ImageBuffer& operator=(const ImageBuffer&) = delete;
         ImageBuffer& operator=(ImageBuffer&&) = delete;
         ~ImageBuffer() noexcept = default;
+
+        [[nodiscard]] vk::ImageMemoryBarrier2 TransitionToLayout(ImageLayout new_layout) noexcept
+        {
+            assert(new_layout != ImageLayout::Unknown);
+            vk::ImageMemoryBarrier2 memory_barrier;
+
+            memory_barrier.oldLayout = GetVkImageLayout(m_Layout);
+            memory_barrier.newLayout = GetVkImageLayout(new_layout);
+            memory_barrier.srcQueueFamilyIndex = vk::QueueFamilyIgnored;
+            memory_barrier.dstQueueFamilyIndex = vk::QueueFamilyIgnored;
+            memory_barrier.image = m_Image.get();
+            memory_barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+            memory_barrier.subresourceRange.baseMipLevel = 0;
+            memory_barrier.subresourceRange.levelCount = 1;
+            memory_barrier.subresourceRange.baseArrayLayer = 0;
+            memory_barrier.subresourceRange.layerCount = 1;
+
+            auto src_access = GetSrcImageAccess(m_Layout, new_layout);
+            auto dst_access = GetDstImageAccess(m_Layout, new_layout);
+
+            memory_barrier.srcStageMask = src_access.first;
+            memory_barrier.srcAccessMask = src_access.second;
+            memory_barrier.dstStageMask = dst_access.first;
+            memory_barrier.dstAccessMask = dst_access.second;
+
+            m_Layout = new_layout;
+            return memory_barrier;
+        }
+
+        [[nodiscard]] vk::ImageMemoryBarrier2 TransitionToOwner(ImageOwner new_owner) noexcept
+        {
+            assert(new_owner != ImageOwner::Unknown);
+
+            vk::ImageMemoryBarrier2 memory_barrier = TransitionToLayout(GetDefaultImageLayoutForOwner(new_owner));
+
+            if (m_Owner != new_owner)
+            {
+                memory_barrier.srcQueueFamilyIndex = GetVkQueueFamily(m_Owner);
+                memory_barrier.dstQueueFamilyIndex = GetVkQueueFamily(new_owner);
+            }
+
+            return memory_barrier;
+        }
 
         [[nodiscard]] vk::Image GetImage() const noexcept
         {
@@ -198,9 +270,38 @@ namespace YT
             return m_Owner;
         }
 
-        [[nodiscard]] ImageLayout GetLayout() const noexcept
+        void SetLastTimelineValue(std::uint64_t timeline_value) noexcept
         {
-            return m_Layout;
+            m_LastTimelineValue = std::max(m_LastTimelineValue, timeline_value);
+        }
+
+        [[nodiscard]] std::uint64_t GetLastTimelineValue() const noexcept
+        {
+            return m_LastTimelineValue;
+        }
+
+        template <typename Visitor>
+        void VisitRenderResources(Visitor && v)
+        {
+            if (m_Image)
+            {
+                v(m_Image);
+            }
+
+            if (m_ImageView)
+            {
+                v(m_ImageView);
+            }
+
+            if (m_Allocation)
+            {
+                v(m_Allocation);
+            }
+
+            if (m_Sampler)
+            {
+                v(m_Sampler);
+            }
         }
 
     private:
@@ -233,5 +334,6 @@ namespace YT
         ImageOwner m_Owner = ImageOwner::Unknown;
         ImageLayout m_Layout = ImageLayout::Unknown;
         ImageUsage m_Usage = ImageUsage::Fragment;
+        std::uint64_t m_LastTimelineValue = 0;
     };
 }

@@ -37,8 +37,8 @@ namespace YT
     export enum class ImageLayout
     {
         Unknown,
-        TransferDst,
-        ShaderOptimized,
+        ShaderRead,
+        TransferDest,
     };
 
     export enum class ImageUsage
@@ -158,6 +158,10 @@ namespace YT
     {
         int m_QuadRenderTypeIndex = 0;
     };
+
+    export std::uint32_t GGraphicsQueueIndex = 0;
+    export std::uint32_t GTransferQueueIndex = 0;
+    export std::uint64_t GPendingFrameTimelineValue = 0;
 }
 
 export namespace YT

@@ -5,7 +5,9 @@ module;
 #include <cstdint>
 #include <span>
 #include <array>
+#include <variant>
 #include <atomic>
+#include <queue>
 #include <memory>
 #include <optional>
 #include <functional>
@@ -129,28 +131,29 @@ namespace YT
         CoroEvent & GetImageGenerationReadyEvent() noexcept { return m_ImageGenerationReadyEvent; }
 
         template <typename Callback>
-        void PushDeferredDeleteCallback(Callback && callback)
+        void PushDeferredDeleteCallback(std::uint64_t timeline_value, Callback && callback)
         {
-            m_FrameResources[m_FrameIndex].m_DeletionCallbacks.emplace_back(std::forward<Callback>(callback));
+            m_DeferredDeleteInfos.emplace(DeferredDeleteInfo{ timeline_value,
+                std::forward<Callback>(callback) });
         }
 
         template <typename ObjectType>
-        void PushDeferredDeleteObject(ObjectType && obj)
+        void PushDeferredDeleteObject(std::uint64_t timeline_value, ObjectType && obj)
         {
-            m_FrameResources[m_FrameIndex].m_DeferredDeletionObjects.emplace_back(std::forward<std::decay_t<ObjectType>>(obj));
+           m_DeferredDeleteInfos.emplace(DeferredDeleteInfo{ timeline_value,
+               DeferredDelete(std::forward<ObjectType>(obj)) });
         }
 
         template <typename ObjectType>
-        void PushDeferredDeleteObjectList(Vector<ObjectType> & obj_list)
+        void PushDeferredDeleteObjectList(std::uint64_t timeline_value, Vector<ObjectType> & obj_list)
         {
             for (ObjectType & obj : obj_list)
             {
-                PushDeferredDeleteObject(std::move(obj));
+                PushDeferredDeleteObject(timeline_value, std::move(obj));
             }
 
             obj_list.clear();
         }
-
 
     protected:
 
@@ -167,6 +170,8 @@ namespace YT
 
         bool SubmitImageUploadCommandBuffer() noexcept;
 
+        std::uint64_t AllocateTimelineSemaphoreValue() noexcept;
+
     private:
 
         // Vulkan data
@@ -177,14 +182,11 @@ namespace YT
 #endif
 
         int m_BestDeviceIndex = -1;
-        int m_BestQueueIndex = -1;
 
-        std::uint32_t m_UploadQueueFamilyIndex = 0;
-        std::uint32_t m_UploadQueueIndexInFamily = 0;
-        /** 1 if only graphics queue requested; 2 if a second graphics-queue command stream is requested for uploads. */
+        std::uint32_t m_TransferQueueIndexInFamily = 0;
         std::uint32_t m_DeviceGraphicsFamilyQueueCount = 1;
 
-        vk::Queue m_UploadQueue;
+        vk::Queue m_TransferQueue;
         Vector<const char *> m_RequiredExtensions;
 
         vk::PhysicalDevice m_PhysicalDevice;
@@ -250,9 +252,6 @@ namespace YT
             vk::UniqueCommandBuffer m_CommandBuffer;
 
             vk::DescriptorSet m_BufferDescriptorSet;
-
-            Vector<Function<void()>> m_DeletionCallbacks;
-            Vector<DeferredDelete> m_DeferredDeletionObjects;
         };
 
         static constexpr int FrameResourceCount = 3;
@@ -260,9 +259,17 @@ namespace YT
         std::uint64_t m_FrameIndex = 0;
 
         vk::UniqueSemaphore m_FrameSemaphore;
-        std::uint64_t m_FrameSemaphoreValue = 0;
 
         UniquePtr<TransferManager> m_TransferManager;
+
+        // Deletion data
+        struct DeferredDeleteInfo
+        {
+            std::uint64_t m_TimelineValue = 0;
+            std::variant<DeferredDelete, Function<void()>> m_Data;
+        };
+
+        std::queue<DeferredDeleteInfo> m_DeferredDeleteInfos;
     };
 
 
