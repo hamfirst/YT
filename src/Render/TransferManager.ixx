@@ -13,26 +13,12 @@ import :Types;
 import :RenderTypes;
 import :MultiProducerSingleConsumer;
 import :StagingBuffer;
+import :ImageBuffer;
 import :OpaqueBuffer;
 import :ObjectPool;
 
 namespace YT
 {
-    export struct AsyncCopyInfo
-    {
-        const void * m_SourceData = nullptr;
-        void * m_TargetData = nullptr;
-        std::uint64_t m_CopySize = 0;
-
-        OpaqueBuffer m_Buffer;
-    };
-
-    /**
-     * Owns upload-queue resources for buffer-to-image (and related) transfers: a CommandPool scoped to the
-     * upload queue family. When \p enable_worker_thread is true, starts a worker thread scaffold for future
-     * async submissions; when false (single-queue fallback), uploads are recorded and submitted from the caller.
-     * Constructed after vk::Device and upload vk::Queue are valid.
-     */
     export class TransferManager final
     {
     public:
@@ -44,19 +30,12 @@ namespace YT
 
         ~TransferManager() noexcept;
 
-        void TransferToFullImage(ImageHandle target_image, void * src_data, std::size_t src_data_size);
-        void TransferToPartialImage(ImageHandle target_image, void * src_data, std::size_t src_data_size,
-            int dst_x, int dst_y, int src_width, int src_height);
+        void TransferToFullImage(ImageBuffer * target_image, void * src_data, std::size_t src_data_size);
+        void TransferToPartialImage(ImageBuffer *  target_image, void * src_data, std::size_t src_data_size,
+            std::uint32_t dst_x, std::uint32_t dst_y, std::uint32_t src_width, std::uint32_t src_height);
 
     private:
-        [[nodiscard]] vk::UniqueCommandBuffer AllocatePrimaryUploadCommandBuffer();
-
-        [[nodiscard]] vk::Result SubmitToUploadQueue(vk::CommandBuffer command_buffer,
-            vk::Fence fence = vk::Fence{});
-
         void Run() noexcept;
-
-        struct WorkerSync;
 
     private:
 
@@ -64,13 +43,47 @@ namespace YT
         vk::Queue m_TransferQueue{};
 
         vk::UniqueCommandPool m_CommandPool;
+        vk::UniqueSemaphore m_TransferSemaphore{};
+        std::uint64_t m_TransferSemaphoreValue = 0;
 
         std::atomic_bool m_Running = false;
-        std::counting_semaphore<> m_Semaphore;
+        std::counting_semaphore<> m_ThreadSemaphore;
 
         Thread m_WorkerThread;
 
         Vector<StagingBuffer> m_PendingStagingBuffers;
         ObjectPool<StagingBuffer> m_StagingBufferPool;
+
+    private:
+
+        struct ImageCopyInfo
+        {
+            StagingBuffer * m_StagingBuffer = nullptr;
+            ImageBuffer * m_ImageBuffer = nullptr;
+
+            std::uint64_t m_BufferOffset = 0;
+            std::uint32_t m_DestinationX = 0;
+            std::uint32_t m_DestinationY = 0;
+
+            std::uint32_t m_SourceWidth = 0;
+            std::uint32_t m_SourceHeight = 0;
+        };
+
+        struct BufferCopyInfo
+        {
+            StagingBuffer * m_StagingBuffer = nullptr;
+
+        };
+
+        struct TransferWork
+        {
+            Vector<vk::ImageMemoryBarrier2> m_PreTransferBarriers;
+            Vector<vk::ImageMemoryBarrier2> m_PostTransferBarriers;
+
+            Vector<ImageCopyInfo> m_ImageCopyInfos;
+
+            uint64_t m_WaitSemaphoreValue = 0;
+            uint64_t m_SignalSemaphoreValue = 0;
+        };
     };
 }
